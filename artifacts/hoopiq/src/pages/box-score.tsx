@@ -8,6 +8,7 @@ import { Game } from "../lib/types";
 export default function BoxScore() {
   const params = useParams();
   const gameId = params.id;
+  const league = params.league as "nba" | "wnba";
 
   const [game, setGame] = useState<Game | null | undefined>(null);
   const [activeTab, setActiveTab] = useState<"away" | "home">("away");
@@ -15,13 +16,13 @@ export default function BoxScore() {
   useEffect(() => {
     let cancelled = false;
     setGame(null);
-    fetchGameById(gameId || "").then((data) => {
+    fetchGameById(gameId || "", league).then((data) => {
       if (!cancelled) setGame((data as Game | undefined) ?? undefined);
     });
     return () => {
       cancelled = true;
     };
-  }, [gameId]);
+  }, [gameId, league]);
 
   if (game === null) {
     return (
