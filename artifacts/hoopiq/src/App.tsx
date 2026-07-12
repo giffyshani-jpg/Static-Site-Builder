@@ -7,6 +7,7 @@ import { Route, Switch, Router as WouterRouter } from 'wouter';
 import Home from './pages/home';
 import LeagueGames from './pages/league-games';
 import BoxScore from './pages/box-score';
+import FantasyOptimizer from './pages/fantasy-optimizer';
 
 const queryClient = new QueryClient();
 
@@ -15,6 +16,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/:league" component={LeagueGames} />
+      <Route path="/:league/game/:id/optimizer" component={FantasyOptimizer} />
       <Route path="/:league/game/:id" component={BoxScore} />
       <Route component={NotFound} />
     </Switch>
