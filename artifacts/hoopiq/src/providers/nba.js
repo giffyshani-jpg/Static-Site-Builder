@@ -1,14 +1,18 @@
 // NBA data provider adapter.
 //
 // Implements the provider contract consumed by api.js: getTodayGames()
-// and getGame(gameId). Fill these in once a real NBA data source is
-// chosen and wired up (e.g. using API_BASE_URL from ../config).
+// and getGame(gameId). Backed by ESPN's public Site API — all
+// ESPN-specific request/response handling lives in ./espn.js.
+
+import * as espn from "./espn";
+
+const LEAGUE = "nba";
 
 /**
  * @returns {Promise<object[]>}
  */
 export async function getTodayGames() {
-  // TODO: fetch today's NBA games from the NBA data provider
+  return espn.getTodayGames(LEAGUE);
 }
 
 /**
@@ -16,5 +20,5 @@ export async function getTodayGames() {
  * @returns {Promise<object | undefined>}
  */
 export async function getGame(gameId) {
-  // TODO: fetch a single NBA game (box score) by id from the NBA data provider
+  return espn.getGame(LEAGUE, gameId);
 }
