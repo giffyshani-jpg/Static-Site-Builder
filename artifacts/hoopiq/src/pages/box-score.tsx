@@ -76,16 +76,29 @@ export default function BoxScore() {
           </div>
         </div>
 
-        <Link href={`/${game.league}/game/${game.id}/optimizer`}>
-          <div className="mt-5 w-full max-w-[280px] rounded-xl bg-primary text-primary-foreground border border-primary-border py-2.5 px-4 flex items-center justify-center gap-2 text-sm font-semibold cursor-pointer active:scale-[0.98] transition-transform">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2v20" />
-              <path d="M2 12h20" />
-              <circle cx="12" cy="12" r="10" />
-            </svg>
-            Fantasy Optimizer
-          </div>
-        </Link>
+        <div className="mt-5 w-full max-w-[280px] grid grid-cols-1 gap-2">
+          <Link href={`/${game.league}/game/${game.id}/optimizer`}>
+            <div className="rounded-xl bg-primary text-primary-foreground border border-primary-border py-2.5 px-4 flex items-center justify-center gap-2 text-sm font-semibold cursor-pointer active:scale-[0.98] transition-transform">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2v20" />
+                <path d="M2 12h20" />
+                <circle cx="12" cy="12" r="10" />
+              </svg>
+              Fantasy Optimizer
+            </div>
+          </Link>
+
+          <Link href={`/${game.league}/game/${game.id}/plays`}>
+            <div className="rounded-xl bg-secondary text-secondary-foreground border border-secondary-border py-2.5 px-4 flex items-center justify-center gap-2 text-sm font-semibold cursor-pointer active:scale-[0.98] transition-transform">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 6h16" />
+                <path d="M4 12h10" />
+                <path d="M4 18h7" />
+              </svg>
+              Play-by-Play
+            </div>
+          </Link>
+        </div>
       </div>
 
       {/* Team Tabs */}

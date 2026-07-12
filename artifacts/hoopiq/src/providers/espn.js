@@ -184,16 +184,21 @@ function normalizeScoreboardEvent(league, event) {
  */
 function normalizePlayByPlay(plays) {
   if (!Array.isArray(plays)) return [];
-  return plays.map((play) => ({
-    id: String(play.id ?? ""),
-    description: play.text ?? "",
-    period: play.period?.displayValue ?? (play.period?.number ? `Q${play.period.number}` : ""),
-    clock: play.clock?.displayValue ?? "",
-    awayScore: play.awayScore ?? null,
-    homeScore: play.homeScore ?? null,
-    scoringPlay: Boolean(play.scoringPlay),
-    teamId: play.team?.id ? String(play.team.id) : null,
-  }));
+  return plays.map((play) => {
+    const typeText = play.type?.text ?? "";
+    return {
+      id: String(play.id ?? ""),
+      description: play.text ?? "",
+      period: play.period?.displayValue ?? (play.period?.number ? `Q${play.period.number}` : ""),
+      clock: play.clock?.displayValue ?? "",
+      awayScore: play.awayScore ?? null,
+      homeScore: play.homeScore ?? null,
+      scoringPlay: Boolean(play.scoringPlay),
+      isSubstitution: /substitution/i.test(typeText) || /substitution/i.test(play.text ?? ""),
+      type: typeText,
+      teamId: play.team?.id ? String(play.team.id) : null,
+    };
+  });
 }
 
 /**

@@ -21,9 +21,23 @@ export type Team = {
   abbreviation: string;
   score: number | null;
   players: Player[];
+  totals?: Record<string, unknown>;
 };
 
 export type GameStatus = "scheduled" | "in_progress" | "final";
+
+export type PlayByPlayEvent = {
+  id: string;
+  description: string;
+  period: string;
+  clock: string;
+  awayScore: number | null;
+  homeScore: number | null;
+  scoringPlay: boolean;
+  isSubstitution: boolean;
+  type: string;
+  teamId: string | null;
+};
 
 export type Game = {
   id: string;
@@ -34,4 +48,5 @@ export type Game = {
   status: GameStatus;
   period?: string;
   clock?: string;
+  playByPlay?: PlayByPlayEvent[];
 };
