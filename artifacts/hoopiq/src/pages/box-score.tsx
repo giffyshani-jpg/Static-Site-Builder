@@ -1,16 +1,35 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams } from "wouter";
 import { MobileLayout } from "../components/layout";
-import { getGameById } from "../lib/mock-data";
+import { fetchGameById } from "../api";
 import { calculateFantasyPoints } from "../lib/stats";
-import { Team } from "../lib/types";
+import { Game } from "../lib/types";
 
 export default function BoxScore() {
   const params = useParams();
   const gameId = params.id;
-  const game = getGameById(gameId || "");
 
+  const [game, setGame] = useState<Game | null | undefined>(null);
   const [activeTab, setActiveTab] = useState<"away" | "home">("away");
+
+  useEffect(() => {
+    let cancelled = false;
+    setGame(null);
+    fetchGameById(gameId || "").then((data) => {
+      if (!cancelled) setGame((data as Game | undefined) ?? undefined);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [gameId]);
+
+  if (game === null) {
+    return (
+      <MobileLayout showBack title="Loading">
+        <div className="p-8 text-center text-muted-foreground">Loading game...</div>
+      </MobileLayout>
+    );
+  }
 
   if (!game) {
     return (
