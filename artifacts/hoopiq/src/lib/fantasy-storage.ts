@@ -56,3 +56,15 @@ export function setStoredPlayerCredits(playerId: string, credits: number): void 
   map[playerId] = credits;
   writeCreditsMap(map);
 }
+
+/**
+ * Clears any saved credit values for the given player ids (e.g. every
+ * player in the game currently being viewed).
+ */
+export function clearStoredPlayerCredits(playerIds: string[]): void {
+  const map = readCreditsMap();
+  for (const id of playerIds) {
+    delete map[id];
+  }
+  writeCreditsMap(map);
+}

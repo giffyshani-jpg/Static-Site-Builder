@@ -3,9 +3,9 @@ import { useParams } from "wouter";
 import { MobileLayout } from "../components/layout";
 import { fetchGameById } from "../api";
 import { calculateFantasyPoints } from "../lib/stats";
-import { baselineCredits } from "../lib/fantasy";
 import {
   DEFAULT_FANTASY_BUDGET,
+  clearStoredPlayerCredits,
   getStoredBudget,
   getStoredPlayerCredits,
   setStoredBudget,
@@ -35,7 +35,7 @@ export default function FantasyOptimizer() {
 
   const [game, setGame] = useState<Game | null | undefined>(null);
   const [budget, setBudget] = useState<number>(DEFAULT_FANTASY_BUDGET);
-  const [credits, setCredits] = useState<Record<string, number>>({});
+  const [credits, setCredits] = useState<Record<string, number | undefined>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("fpts");
@@ -55,10 +55,9 @@ export default function FantasyOptimizer() {
 
       if (loadedGame) {
         const allPlayers = [...loadedGame.awayTeam.players, ...loadedGame.homeTeam.players];
-        const initialCredits: Record<string, number> = {};
+        const initialCredits: Record<string, number | undefined> = {};
         for (const player of allPlayers) {
-          const stored = getStoredPlayerCredits(player.id);
-          initialCredits[player.id] = stored !== undefined ? stored : baselineCredits(player.stats);
+          initialCredits[player.id] = getStoredPlayerCredits(player.id);
         }
         setCredits(initialCredits);
       }
@@ -91,7 +90,7 @@ export default function FantasyOptimizer() {
 
     const withCredits = filtered.map((p) => ({
       ...p,
-      credits: credits[p.id] ?? baselineCredits(p.stats),
+      credits: credits[p.id] ?? 0,
     }));
 
     const sorted = [...withCredits].sort((a, b) => {
@@ -121,10 +120,27 @@ export default function FantasyOptimizer() {
   };
 
   const handleCreditsChange = (playerId: string, value: string) => {
+    if (value.trim() === "") {
+      setCredits((prev) => ({ ...prev, [playerId]: undefined }));
+      clearStoredPlayerCredits([playerId]);
+      return;
+    }
     const parsed = Number(value);
     const next = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
     setCredits((prev) => ({ ...prev, [playerId]: next }));
     setStoredPlayerCredits(playerId, next);
+  };
+
+  const handleResetCredits = () => {
+    const playerIds = players.map((p) => p.id);
+    clearStoredPlayerCredits(playerIds);
+    setCredits((prev) => {
+      const next = { ...prev };
+      for (const id of playerIds) {
+        next[id] = undefined;
+      }
+      return next;
+    });
   };
 
   const toggleSelected = (playerId: string) => {
@@ -141,7 +157,7 @@ export default function FantasyOptimizer() {
 
   const selectedPlayers = players.filter((p) => selected.has(p.id));
   const totalCreditsUsed = selectedPlayers.reduce(
-    (sum, p) => sum + (credits[p.id] ?? baselineCredits(p.stats)),
+    (sum, p) => sum + (credits[p.id] ?? 0),
     0,
   );
   const remainingCredits = budget - totalCreditsUsed;
@@ -183,6 +199,14 @@ export default function FantasyOptimizer() {
               className="w-24 h-9 rounded-md border border-input bg-transparent px-3 text-right text-sm font-semibold tabular-nums shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
           </label>
+
+          <button
+            type="button"
+            onClick={handleResetCredits}
+            className="self-start text-xs font-semibold text-destructive border border-destructive-border rounded-md px-3 py-1.5 active:scale-[0.98] transition-transform"
+          >
+            Reset Credits
+          </button>
         </div>
 
         {/* Summary */}
@@ -293,10 +317,11 @@ export default function FantasyOptimizer() {
                       type="number"
                       min={0}
                       inputMode="numeric"
-                      value={credits[player.id] ?? baselineCredits(player.stats)}
+                      placeholder="—"
+                      value={credits[player.id] ?? ""}
                       onClick={(e) => e.stopPropagation()}
                       onChange={(e) => handleCreditsChange(player.id, e.target.value)}
-                      className="w-16 h-8 rounded-md border border-input bg-transparent px-2 text-right text-sm font-semibold tabular-nums shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      className="w-16 h-8 rounded-md border border-input bg-transparent px-2 text-right text-sm font-semibold tabular-nums shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     />
                   </div>
                 </div>
