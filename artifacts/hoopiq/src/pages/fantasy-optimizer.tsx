@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useParams } from "wouter";
 import { MobileLayout } from "../components/layout";
 import { CompareBar } from "../components/compare-bar";
+import { StarButton } from "../components/star-button";
 import { fetchGameById } from "../api";
 import { calculateFantasyPoints } from "../lib/stats";
 import {
@@ -13,6 +14,7 @@ import {
   setStoredPlayerCredits,
 } from "../lib/fantasy-storage";
 import { useComparisonSelection } from "../hooks/use-comparison-selection";
+import { useFavorites } from "../hooks/use-favorites";
 import { Game, Player } from "../lib/types";
 
 type SortKey = "fpts" | "points" | "rebounds" | "assists" | "credits";
@@ -41,7 +43,9 @@ export default function FantasyOptimizer() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("fpts");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
   const comparison = useComparisonSelection(gameId);
+  const favorites = useFavorites();
 
   useEffect(() => {
     setBudget(getStoredBudget());
@@ -87,9 +91,13 @@ export default function FantasyOptimizer() {
 
   const visiblePlayers = useMemo(() => {
     const query = search.trim().toLowerCase();
-    const filtered = query
+    let filtered = query
       ? players.filter((p) => p.name.toLowerCase().includes(query))
       : players;
+
+    if (favoritesOnly) {
+      filtered = filtered.filter((p) => favorites.isFavorite(p.id));
+    }
 
     const withCredits = filtered.map((p) => ({
       ...p,
@@ -112,8 +120,15 @@ export default function FantasyOptimizer() {
       }
     });
 
+    // Favorites always bubble to the top on top of whatever sort is active.
+    sorted.sort((a, b) => {
+      const aFav = favorites.isFavorite(a.id) ? 1 : 0;
+      const bFav = favorites.isFavorite(b.id) ? 1 : 0;
+      return bFav - aFav;
+    });
+
     return sorted;
-  }, [players, credits, search, sortKey]);
+  }, [players, credits, search, sortKey, favorites, favoritesOnly]);
 
   const handleBudgetChange = (value: string) => {
     const parsed = Number(value);
@@ -268,6 +283,21 @@ export default function FantasyOptimizer() {
               ))}
             </select>
           </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs font-medium text-muted-foreground shrink-0">Favorites only</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={favoritesOnly}
+              onClick={() => setFavoritesOnly((v) => !v)}
+              className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${favoritesOnly ? "bg-primary" : "bg-muted"}`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${favoritesOnly ? "translate-x-4" : "translate-x-0"}`}
+              />
+            </button>
+          </div>
         </div>
 
         {/* Player list */}
@@ -277,6 +307,7 @@ export default function FantasyOptimizer() {
           ) : (
             visiblePlayers.map((player) => {
               const isSelected = selected.has(player.id);
+              const isFavorite = favorites.isFavorite(player.id);
               return (
                 <div
                   key={player.id}
@@ -293,6 +324,12 @@ export default function FantasyOptimizer() {
                     onChange={() => toggleSelected(player.id)}
                     onClick={(e) => e.stopPropagation()}
                     className="h-4 w-4 shrink-0 rounded-sm border border-primary accent-primary"
+                  />
+
+                  <StarButton
+                    active={isFavorite}
+                    onToggle={() => favorites.toggleFavorite(player.id)}
+                    label={isFavorite ? `Unfavorite ${player.name}` : `Favorite ${player.name}`}
                   />
 
                   <div className="flex-1 min-w-0">

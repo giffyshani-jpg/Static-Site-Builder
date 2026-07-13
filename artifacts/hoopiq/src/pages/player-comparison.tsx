@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams } from "wouter";
 import { MobileLayout } from "../components/layout";
+import { StarButton } from "../components/star-button";
 import { fetchGameById } from "../api";
 import { calculateFantasyPoints } from "../lib/stats";
 import { useComparisonSelection } from "../hooks/use-comparison-selection";
+import { useFavorites } from "../hooks/use-favorites";
 import { Game, Player } from "../lib/types";
 
 type ComparePlayer = Player & {
@@ -119,6 +121,7 @@ export default function PlayerComparison() {
 
   const [game, setGame] = useState<Game | null | undefined>(null);
   const comparison = useComparisonSelection(gameId);
+  const favorites = useFavorites();
 
   useEffect(() => {
     let cancelled = false;
@@ -208,30 +211,41 @@ export default function PlayerComparison() {
             >
               {/* Header row: sticky top, corner cell also sticky left */}
               <div className="sticky top-0 left-0 z-30 bg-muted/95 border-b border-r border-border" />
-              {comparedPlayers.map((player) => (
-                <div
-                  key={player.id}
-                  className="sticky top-0 z-20 bg-muted/95 border-b border-border px-2 py-2 flex flex-col items-center gap-1"
-                >
-                  <button
-                    type="button"
-                    onClick={() => comparison.remove(player.id)}
-                    aria-label={`Remove ${player.name} from comparison`}
-                    className="self-end -mt-1 -mr-1 text-muted-foreground hover:text-destructive p-0.5"
+              {comparedPlayers.map((player) => {
+                const isFavorite = favorites.isFavorite(player.id);
+                return (
+                  <div
+                    key={player.id}
+                    className="sticky top-0 z-20 bg-muted/95 border-b border-border px-2 py-2 flex flex-col items-center gap-1"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M18 6 6 18" />
-                      <path d="m6 6 12 12" />
-                    </svg>
-                  </button>
-                  <span className="text-xs font-bold text-foreground text-center leading-tight truncate w-full">
-                    {player.name}
-                  </span>
-                  <span className="text-[10px] font-semibold uppercase text-muted-foreground">
-                    {player.teamAbbreviation} • #{player.number}
-                  </span>
-                </div>
-              ))}
+                    <div className="self-stretch flex items-center justify-between -mt-1 -mr-1">
+                      <StarButton
+                        active={isFavorite}
+                        onToggle={() => favorites.toggleFavorite(player.id)}
+                        label={isFavorite ? `Unfavorite ${player.name}` : `Favorite ${player.name}`}
+                        size={14}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => comparison.remove(player.id)}
+                        aria-label={`Remove ${player.name} from comparison`}
+                        className="text-muted-foreground hover:text-destructive p-0.5"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M18 6 6 18" />
+                          <path d="m6 6 12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                    <span className="text-xs font-bold text-foreground text-center leading-tight truncate w-full">
+                      {player.name}
+                    </span>
+                    <span className="text-[10px] font-semibold uppercase text-muted-foreground">
+                      {player.teamAbbreviation} • #{player.number}
+                    </span>
+                  </div>
+                );
+              })}
 
               {/* Stat rows */}
               {visibleRows.map((row) => {

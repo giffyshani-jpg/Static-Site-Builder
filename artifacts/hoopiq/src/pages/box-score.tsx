@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "wouter";
 import { MobileLayout } from "../components/layout";
 import { CompareBar } from "../components/compare-bar";
+import { StarButton } from "../components/star-button";
 import { fetchGameById } from "../api";
 import { calculateFantasyPoints } from "../lib/stats";
 import { useComparisonSelection } from "../hooks/use-comparison-selection";
+import { useFavorites } from "../hooks/use-favorites";
 import { Game } from "../lib/types";
 
 export default function BoxScore() {
@@ -14,7 +16,9 @@ export default function BoxScore() {
 
   const [game, setGame] = useState<Game | null | undefined>(null);
   const [activeTab, setActiveTab] = useState<"away" | "home">("away");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
   const comparison = useComparisonSelection(gameId);
+  const favorites = useFavorites();
 
   useEffect(() => {
     let cancelled = false;
@@ -27,6 +31,22 @@ export default function BoxScore() {
     };
   }, [gameId, league]);
 
+  const activeTeam = game ? (activeTab === "away" ? game.awayTeam : game.homeTeam) : undefined;
+
+  const visiblePlayers = useMemo(() => {
+    const teamPlayers = activeTeam?.players ?? [];
+    const base = favoritesOnly
+      ? teamPlayers.filter((p) => favorites.isFavorite(p.id))
+      : teamPlayers;
+
+    // Favorites always bubble to the top, otherwise preserve original order.
+    return [...base].sort((a, b) => {
+      const aFav = favorites.isFavorite(a.id) ? 1 : 0;
+      const bFav = favorites.isFavorite(b.id) ? 1 : 0;
+      return bFav - aFav;
+    });
+  }, [activeTeam, favorites, favoritesOnly]);
+
   if (game === null) {
     return (
       <MobileLayout showBack title="Loading">
@@ -35,15 +55,13 @@ export default function BoxScore() {
     );
   }
 
-  if (!game) {
+  if (!game || !activeTeam) {
     return (
       <MobileLayout showBack title="Not Found">
         <div className="p-8 text-center text-muted-foreground">Game not found</div>
       </MobileLayout>
     );
   }
-
-  const activeTeam = activeTab === "away" ? game.awayTeam : game.homeTeam;
 
   return (
     <MobileLayout showBack title={`${game.awayTeam.abbreviation} vs ${game.homeTeam.abbreviation}`}>
@@ -120,12 +138,29 @@ export default function BoxScore() {
         </button>
       </div>
 
+      {/* Favorites filter */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-background">
+        <span className="text-xs font-medium text-muted-foreground">Favorites only</span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={favoritesOnly}
+          onClick={() => setFavoritesOnly((v) => !v)}
+          className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${favoritesOnly ? "bg-primary" : "bg-muted"}`}
+        >
+          <span
+            className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${favoritesOnly ? "translate-x-4" : "translate-x-0"}`}
+          />
+        </button>
+      </div>
+
       {/* Stats Table */}
       <div className="w-full overflow-x-auto bg-card pb-12">
         <table className="w-full text-sm text-left whitespace-nowrap">
           <thead className="text-xs text-muted-foreground bg-muted/40 uppercase sticky top-0">
             <tr>
-              <th className="px-4 py-3 font-medium sticky left-0 bg-muted/95 z-10 shadow-[1px_0_0_0_var(--color-border)] min-w-[140px]">Player</th>
+              <th className="px-2 py-3 font-medium text-center w-10">Star</th>
+              <th className="px-4 py-3 font-medium sticky left-10 bg-muted/95 z-10 shadow-[1px_0_0_0_var(--color-border)] min-w-[140px]">Player</th>
               <th className="px-3 py-3 font-medium text-right">FPTS</th>
               <th className="px-3 py-3 font-medium text-right">PTS</th>
               <th className="px-3 py-3 font-medium text-right">REB</th>
@@ -137,13 +172,28 @@ export default function BoxScore() {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {activeTeam.players.map((player) => {
+            {visiblePlayers.length === 0 ? (
+              <tr>
+                <td colSpan={9} className="px-4 py-10 text-center text-muted-foreground text-sm">
+                  No favorited players on this team.
+                </td>
+              </tr>
+            ) : (
+            visiblePlayers.map((player) => {
               const fpts = calculateFantasyPoints(player.stats);
               const isComparing = comparison.isSelected(player.id);
               const disableAdd = comparison.isFull && !isComparing;
+              const isFavorite = favorites.isFavorite(player.id);
               return (
                 <tr key={player.id} className="hover:bg-muted/20 transition-colors">
-                  <td className="px-4 py-3 sticky left-0 bg-card z-10 shadow-[1px_0_0_0_var(--color-border)]">
+                  <td className="px-2 py-3 text-center">
+                    <StarButton
+                      active={isFavorite}
+                      onToggle={() => favorites.toggleFavorite(player.id)}
+                      label={isFavorite ? `Unfavorite ${player.name}` : `Favorite ${player.name}`}
+                    />
+                  </td>
+                  <td className="px-4 py-3 sticky left-10 bg-card z-10 shadow-[1px_0_0_0_var(--color-border)]">
                     <div className="flex flex-col">
                       <span className="font-semibold text-foreground truncate max-w-[120px]">{player.name}</span>
                       <span className="text-xs text-muted-foreground">#{player.number} • {player.position}</span>
@@ -176,7 +226,8 @@ export default function BoxScore() {
                   </td>
                 </tr>
               );
-            })}
+            })
+            )}
           </tbody>
         </table>
       </div>
