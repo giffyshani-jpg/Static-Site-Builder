@@ -24,6 +24,10 @@ export type Player = {
   number: string;
   position: string;
   stats: PlayerStats;
+  // Populated from the same per-game summary response (ESPN includes an
+  // injury report alongside the box score) — no extra request. Absent
+  // when the player isn't listed on any team's injury report.
+  injuryStatus?: "OUT" | "GTD" | "Questionable" | "Probable";
 };
 
 export type Team = {

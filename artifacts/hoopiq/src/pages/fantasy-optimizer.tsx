@@ -3,6 +3,8 @@ import { useParams } from "wouter";
 import { MobileLayout } from "../components/layout";
 import { CompareBar } from "../components/compare-bar";
 import { StarButton } from "../components/star-button";
+import { InjuryBadge } from "../components/injury-badge";
+import { RecentFormBadge } from "../components/recent-form-badge";
 import { fetchGameById } from "../api";
 import { calculateFantasyPoints } from "../lib/stats";
 import {
@@ -15,9 +17,12 @@ import {
 } from "../lib/fantasy-storage";
 import { useComparisonSelection } from "../hooks/use-comparison-selection";
 import { useFavorites } from "../hooks/use-favorites";
+import { useRecentForm } from "../hooks/use-recent-form";
+import { TeamFilter, getOptimizerPrefs, setOptimizerPrefs } from "../lib/preferences";
+import { exportOptimizerSelectionAsText } from "../lib/export";
 import { Game, Player } from "../lib/types";
 
-type SortKey = "fpts" | "points" | "rebounds" | "assists" | "credits";
+type SortKey = "fpts" | "points" | "rebounds" | "assists" | "credits" | "minutes";
 
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "fpts", label: "Fantasy Points" },
@@ -25,12 +30,19 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "rebounds", label: "Rebounds" },
   { value: "assists", label: "Assists" },
   { value: "credits", label: "Credits" },
+  { value: "minutes", label: "Minutes" },
 ];
 
 type OptimizerPlayer = Player & {
   teamAbbreviation: string;
+  isHome: boolean;
   fpts: number;
 };
+
+function minutesValue(stats: Player["stats"]): number {
+  const parsed = stats.minutes ? parseFloat(stats.minutes) : NaN;
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 
 export default function FantasyOptimizer() {
   const params = useParams();
@@ -43,9 +55,29 @@ export default function FantasyOptimizer() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("fpts");
+  const [teamFilter, setTeamFilter] = useState<TeamFilter>("all");
+  const [positionFilter, setPositionFilter] = useState("all");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
   const comparison = useComparisonSelection(gameId);
   const favorites = useFavorites();
+  const recentForm = useRecentForm();
+
+  // Restore remembered sort/filter choices (global — this page always
+  // shows one game at a time, so prefs travel with the user, not the game).
+  useEffect(() => {
+    const prefs = getOptimizerPrefs();
+    setSortKey(prefs.sortKey as SortKey);
+    setTeamFilter(prefs.teamFilter);
+    setPositionFilter(prefs.position);
+    setFavoritesOnly(prefs.favoritesOnly);
+    setPrefsLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!prefsLoaded) return;
+    setOptimizerPrefs({ sortKey, teamFilter, position: positionFilter, favoritesOnly });
+  }, [prefsLoaded, sortKey, teamFilter, positionFilter, favoritesOnly]);
 
   useEffect(() => {
     setBudget(getStoredBudget());
@@ -67,11 +99,20 @@ export default function FantasyOptimizer() {
           initialCredits[player.id] = getStoredPlayerCredits(player.id);
         }
         setCredits(initialCredits);
+
+        if (gameId) {
+          recentForm.recordGame(
+            allPlayers.map((p) => ({ id: p.id, fpts: calculateFantasyPoints(p.stats) })),
+            gameId,
+            Date.now(),
+          );
+        }
       }
     });
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId, league]);
 
   const players: OptimizerPlayer[] = useMemo(() => {
@@ -79,21 +120,36 @@ export default function FantasyOptimizer() {
     const away = game.awayTeam.players.map((p) => ({
       ...p,
       teamAbbreviation: game.awayTeam.abbreviation,
+      isHome: false,
       fpts: calculateFantasyPoints(p.stats),
     }));
     const home = game.homeTeam.players.map((p) => ({
       ...p,
       teamAbbreviation: game.homeTeam.abbreviation,
+      isHome: true,
       fpts: calculateFantasyPoints(p.stats),
     }));
     return [...away, ...home];
   }, [game]);
+
+  const availablePositions = useMemo(
+    () => Array.from(new Set(players.map((p) => p.position).filter(Boolean))).sort(),
+    [players],
+  );
 
   const visiblePlayers = useMemo(() => {
     const query = search.trim().toLowerCase();
     let filtered = query
       ? players.filter((p) => p.name.toLowerCase().includes(query))
       : players;
+
+    if (teamFilter !== "all") {
+      filtered = filtered.filter((p) => (teamFilter === "home" ? p.isHome : !p.isHome));
+    }
+
+    if (positionFilter !== "all") {
+      filtered = filtered.filter((p) => p.position === positionFilter);
+    }
 
     if (favoritesOnly) {
       filtered = filtered.filter((p) => favorites.isFavorite(p.id));
@@ -114,6 +170,8 @@ export default function FantasyOptimizer() {
           return b.stats.assists - a.stats.assists;
         case "credits":
           return b.credits - a.credits;
+        case "minutes":
+          return minutesValue(b.stats) - minutesValue(a.stats);
         case "fpts":
         default:
           return b.fpts - a.fpts;
@@ -128,7 +186,7 @@ export default function FantasyOptimizer() {
     });
 
     return sorted;
-  }, [players, credits, search, sortKey, favorites, favoritesOnly]);
+  }, [players, credits, search, sortKey, teamFilter, positionFilter, favorites, favoritesOnly]);
 
   const handleBudgetChange = (value: string) => {
     const parsed = Number(value);
@@ -181,6 +239,20 @@ export default function FantasyOptimizer() {
   const remainingCredits = budget - totalCreditsUsed;
   const totalFantasyPoints = selectedPlayers.reduce((sum, p) => sum + p.fpts, 0);
 
+  const handleExportSelection = () => {
+    if (!game || selectedPlayers.length === 0) return;
+    exportOptimizerSelectionAsText(
+      selectedPlayers.map((p) => ({
+        name: p.name,
+        teamAbbreviation: p.teamAbbreviation,
+        position: p.position,
+        fpts: p.fpts,
+        credits: credits[p.id] ?? 0,
+      })),
+      `${game.awayTeam.abbreviation} @ ${game.homeTeam.abbreviation}`,
+    );
+  };
+
   if (game === null) {
     return (
       <MobileLayout showBack title="Fantasy Optimizer">
@@ -218,13 +290,27 @@ export default function FantasyOptimizer() {
             />
           </label>
 
-          <button
-            type="button"
-            onClick={handleResetCredits}
-            className="self-start text-xs font-semibold text-destructive border border-destructive-border rounded-md px-3 py-1.5 active:scale-[0.98] transition-transform"
-          >
-            Reset Credits
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleResetCredits}
+              className="text-xs font-semibold text-destructive border border-destructive-border rounded-md px-3 py-1.5 active:scale-[0.98] transition-transform"
+            >
+              Reset Credits
+            </button>
+            <button
+              type="button"
+              disabled={selectedPlayers.length === 0}
+              onClick={handleExportSelection}
+              className={`text-xs font-semibold rounded-md px-3 py-1.5 border transition-transform active:scale-[0.98] ${
+                selectedPlayers.length === 0
+                  ? "border-border text-muted-foreground opacity-50 cursor-not-allowed"
+                  : "border-primary-border text-primary hover:bg-primary/10"
+              }`}
+            >
+              Export Lineup
+            </button>
+          </div>
         </div>
 
         {/* Summary */}
@@ -284,6 +370,41 @@ export default function FantasyOptimizer() {
             </select>
           </div>
 
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {(["all", "away", "home"] as TeamFilter[]).map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setTeamFilter(value)}
+                className={`text-xs font-semibold rounded-full px-3 py-1 border transition-colors ${teamFilter === value ? "bg-primary text-primary-foreground border-primary-border" : "border-border text-muted-foreground hover:bg-muted/40"}`}
+              >
+                {value === "all" ? "All Teams" : value === "away" ? game.awayTeam.abbreviation : game.homeTeam.abbreviation}
+              </button>
+            ))}
+          </div>
+
+          {availablePositions.length > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setPositionFilter("all")}
+                className={`text-xs font-semibold rounded-full px-3 py-1 border transition-colors ${positionFilter === "all" ? "bg-primary text-primary-foreground border-primary-border" : "border-border text-muted-foreground hover:bg-muted/40"}`}
+              >
+                All Positions
+              </button>
+              {availablePositions.map((position) => (
+                <button
+                  key={position}
+                  type="button"
+                  onClick={() => setPositionFilter(position)}
+                  className={`text-xs font-semibold rounded-full px-3 py-1 border transition-colors ${positionFilter === position ? "bg-primary text-primary-foreground border-primary-border" : "border-border text-muted-foreground hover:bg-muted/40"}`}
+                >
+                  {position}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="flex items-center justify-between gap-3">
             <span className="text-xs font-medium text-muted-foreground shrink-0">Favorites only</span>
             <button
@@ -308,6 +429,7 @@ export default function FantasyOptimizer() {
             visiblePlayers.map((player) => {
               const isSelected = selected.has(player.id);
               const isFavorite = favorites.isFavorite(player.id);
+              const form = recentForm.getForm(player.id);
               return (
                 <div
                   key={player.id}
@@ -338,14 +460,16 @@ export default function FantasyOptimizer() {
                       <span className="text-[10px] font-semibold uppercase text-muted-foreground shrink-0">
                         {player.teamAbbreviation}
                       </span>
+                      <InjuryBadge status={player.injuryStatus} />
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      #{player.number} • {player.position}
+                      #{player.number} • {player.position} • {player.stats.minutes ?? "-"} MIN
                     </div>
-                    <div className="flex gap-3 mt-1 text-xs text-muted-foreground tabular-nums">
+                    <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground tabular-nums">
                       <span>{player.stats.points} PTS</span>
                       <span>{player.stats.rebounds} REB</span>
                       <span>{player.stats.assists} AST</span>
+                      <RecentFormBadge entries={form} />
                     </div>
                   </div>
 

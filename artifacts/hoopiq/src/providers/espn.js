@@ -202,10 +202,51 @@ function normalizePlayByPlay(plays) {
 }
 
 /**
+ * Maps ESPN's injury `type`/`fantasyStatus` text to one of our four
+ * canonical badge values. Returns undefined for anything unrecognized
+ * so the UI simply hides the badge rather than showing something wrong.
+ */
+function normalizeInjuryStatus(injury) {
+  const raw = String(
+    injury?.details?.fantasyStatus?.description ||
+      injury?.details?.fantasyStatus?.abbreviation ||
+      injury?.type?.description ||
+      injury?.status ||
+      "",
+  ).toLowerCase();
+
+  if (raw.includes("out")) return "OUT";
+  if (raw.includes("game-time") || raw.includes("gtd") || raw.includes("day-to-day")) return "GTD";
+  if (raw.includes("question")) return "Questionable";
+  if (raw.includes("probable")) return "Probable";
+  return undefined;
+}
+
+/**
+ * Builds { [athleteId]: injuryStatus } from a summary response's
+ * top-level `injuries` array — ESPN includes each team's injury report
+ * alongside the box score in the same summary payload, so this needs no
+ * extra request.
+ */
+function buildInjuryStatusByAthleteId(injuriesBlocks) {
+  const byAthleteId = {};
+  if (!Array.isArray(injuriesBlocks)) return byAthleteId;
+  for (const teamBlock of injuriesBlocks) {
+    for (const injury of teamBlock.injuries ?? []) {
+      const athleteId = String(injury.athlete?.id ?? "");
+      if (!athleteId) continue;
+      const status = normalizeInjuryStatus(injury);
+      if (status) byAthleteId[athleteId] = status;
+    }
+  }
+  return byAthleteId;
+}
+
+/**
  * Builds full Player[] rosters (with box score stats) for both teams
  * from a summary response's `boxscore.players` array, keyed by team id.
  */
-function buildPlayersByTeamId(boxscorePlayers) {
+function buildPlayersByTeamId(boxscorePlayers, injuryStatusByAthleteId) {
   const byTeamId = {};
   if (!Array.isArray(boxscorePlayers)) return byTeamId;
 
@@ -217,12 +258,15 @@ function buildPlayersByTeamId(boxscorePlayers) {
       const names = statGroup.names ?? statGroup.labels ?? [];
       for (const athleteEntry of statGroup.athletes ?? []) {
         const athlete = athleteEntry.athlete ?? {};
+        const athleteId = String(athlete.id ?? `${teamId}-${players.length}`);
+        const injuryStatus = injuryStatusByAthleteId?.[athleteId];
         players.push({
-          id: String(athlete.id ?? `${teamId}-${players.length}`),
+          id: athleteId,
           name: athlete.displayName ?? athlete.shortName ?? "Unknown",
           number: athlete.jersey ?? "",
           position: athlete.position?.abbreviation ?? "",
           stats: buildStatsFromNames(names, athleteEntry.stats),
+          ...(injuryStatus ? { injuryStatus } : {}),
         });
       }
     }
@@ -259,7 +303,8 @@ function normalizeSummary(league, gameId, summary) {
   const awayCompetitor = competitors.find((c) => c.homeAway === "away");
   const homeCompetitor = competitors.find((c) => c.homeAway === "home");
 
-  const playersByTeamId = buildPlayersByTeamId(summary.boxscore?.players);
+  const injuryStatusByAthleteId = buildInjuryStatusByAthleteId(summary.injuries);
+  const playersByTeamId = buildPlayersByTeamId(summary.boxscore?.players, injuryStatusByAthleteId);
   const totalsByTeamId = buildTeamTotalsByTeamId(summary.boxscore?.teams);
 
   const gameStatus = mapStatusState(status?.type);

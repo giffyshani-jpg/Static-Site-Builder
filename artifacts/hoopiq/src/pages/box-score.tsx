@@ -3,11 +3,22 @@ import { useParams, Link } from "wouter";
 import { MobileLayout } from "../components/layout";
 import { CompareBar } from "../components/compare-bar";
 import { StarButton } from "../components/star-button";
+import { InjuryBadge } from "../components/injury-badge";
+import { RecentFormBadge } from "../components/recent-form-badge";
 import { fetchGameById } from "../api";
 import { calculateFantasyPoints } from "../lib/stats";
 import { useComparisonSelection } from "../hooks/use-comparison-selection";
 import { useFavorites } from "../hooks/use-favorites";
-import { Game } from "../lib/types";
+import { useRecentForm } from "../hooks/use-recent-form";
+import {
+  BoxScoreTab,
+  getBoxScorePrefs,
+  setBoxScorePrefs,
+  setLastGame,
+} from "../lib/preferences";
+import { Game, Player } from "../lib/types";
+
+type RosterPlayer = Player & { teamAbbreviation: string };
 
 export default function BoxScore() {
   const params = useParams();
@@ -15,29 +26,78 @@ export default function BoxScore() {
   const league = params.league as "nba" | "wnba";
 
   const [game, setGame] = useState<Game | null | undefined>(null);
-  const [activeTab, setActiveTab] = useState<"away" | "home">("away");
+  const [activeTab, setActiveTab] = useState<BoxScoreTab>("away");
+  const [positionFilter, setPositionFilter] = useState("all");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
   const comparison = useComparisonSelection(gameId);
   const favorites = useFavorites();
+  const recentForm = useRecentForm();
+
+  // Restore the remembered tab/filters for this specific game.
+  useEffect(() => {
+    const prefs = getBoxScorePrefs(gameId);
+    setActiveTab(prefs.tab);
+    setPositionFilter(prefs.position);
+    setFavoritesOnly(prefs.favoritesOnly);
+    setPrefsLoaded(true);
+  }, [gameId]);
+
+  // Persist whenever the user changes tab/filters (skip the initial
+  // render so we don't immediately re-write the values we just loaded).
+  useEffect(() => {
+    if (!prefsLoaded || !gameId) return;
+    setBoxScorePrefs(gameId, { tab: activeTab, position: positionFilter, favoritesOnly });
+  }, [gameId, prefsLoaded, activeTab, positionFilter, favoritesOnly]);
 
   useEffect(() => {
     let cancelled = false;
     setGame(null);
     fetchGameById(gameId || "", league).then((data) => {
-      if (!cancelled) setGame((data as Game | undefined) ?? undefined);
+      if (cancelled) return;
+      const loadedGame = (data as Game | undefined) ?? undefined;
+      setGame(loadedGame ?? undefined);
+      if (loadedGame && gameId) {
+        setLastGame({ league, gameId });
+        const allPlayers = [...loadedGame.awayTeam.players, ...loadedGame.homeTeam.players];
+        recentForm.recordGame(
+          allPlayers.map((p) => ({ id: p.id, fpts: calculateFantasyPoints(p.stats) })),
+          gameId,
+          Date.now(),
+        );
+      }
     });
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId, league]);
 
-  const activeTeam = game ? (activeTab === "away" ? game.awayTeam : game.homeTeam) : undefined;
+  const rosterPlayers: RosterPlayer[] = useMemo(() => {
+    if (!game) return [];
+    if (activeTab === "all") {
+      return [
+        ...game.awayTeam.players.map((p) => ({ ...p, teamAbbreviation: game.awayTeam.abbreviation })),
+        ...game.homeTeam.players.map((p) => ({ ...p, teamAbbreviation: game.homeTeam.abbreviation })),
+      ];
+    }
+    const team = activeTab === "away" ? game.awayTeam : game.homeTeam;
+    return team.players.map((p) => ({ ...p, teamAbbreviation: team.abbreviation }));
+  }, [game, activeTab]);
+
+  const availablePositions = useMemo(
+    () => Array.from(new Set(rosterPlayers.map((p) => p.position).filter(Boolean))).sort(),
+    [rosterPlayers],
+  );
 
   const visiblePlayers = useMemo(() => {
-    const teamPlayers = activeTeam?.players ?? [];
-    const base = favoritesOnly
-      ? teamPlayers.filter((p) => favorites.isFavorite(p.id))
-      : teamPlayers;
+    let base = rosterPlayers;
+    if (positionFilter !== "all") {
+      base = base.filter((p) => p.position === positionFilter);
+    }
+    if (favoritesOnly) {
+      base = base.filter((p) => favorites.isFavorite(p.id));
+    }
 
     // Favorites always bubble to the top, otherwise preserve original order.
     return [...base].sort((a, b) => {
@@ -45,7 +105,7 @@ export default function BoxScore() {
       const bFav = favorites.isFavorite(b.id) ? 1 : 0;
       return bFav - aFav;
     });
-  }, [activeTeam, favorites, favoritesOnly]);
+  }, [rosterPlayers, positionFilter, favorites, favoritesOnly]);
 
   if (game === null) {
     return (
@@ -55,7 +115,7 @@ export default function BoxScore() {
     );
   }
 
-  if (!game || !activeTeam) {
+  if (!game) {
     return (
       <MobileLayout showBack title="Not Found">
         <div className="p-8 text-center text-muted-foreground">Game not found</div>
@@ -136,7 +196,36 @@ export default function BoxScore() {
         >
           {game.homeTeam.name}
         </button>
+        <button
+          onClick={() => setActiveTab("all")}
+          className={`w-16 py-3 text-sm font-semibold transition-colors border-b-2 shrink-0 ${activeTab === "all" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+        >
+          All
+        </button>
       </div>
+
+      {/* Position filter */}
+      {availablePositions.length > 0 && (
+        <div className="flex items-center gap-1.5 px-4 py-2.5 border-b border-border bg-background overflow-x-auto whitespace-nowrap">
+          <button
+            type="button"
+            onClick={() => setPositionFilter("all")}
+            className={`text-xs font-semibold rounded-full px-3 py-1 border transition-colors shrink-0 ${positionFilter === "all" ? "bg-primary text-primary-foreground border-primary-border" : "border-border text-muted-foreground hover:bg-muted/40"}`}
+          >
+            All
+          </button>
+          {availablePositions.map((position) => (
+            <button
+              key={position}
+              type="button"
+              onClick={() => setPositionFilter(position)}
+              className={`text-xs font-semibold rounded-full px-3 py-1 border transition-colors shrink-0 ${positionFilter === position ? "bg-primary text-primary-foreground border-primary-border" : "border-border text-muted-foreground hover:bg-muted/40"}`}
+            >
+              {position}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Favorites filter */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-background">
@@ -161,7 +250,9 @@ export default function BoxScore() {
             <tr>
               <th className="px-2 py-3 font-medium text-center w-10">Star</th>
               <th className="px-4 py-3 font-medium sticky left-10 bg-muted/95 z-10 shadow-[1px_0_0_0_var(--color-border)] min-w-[140px]">Player</th>
+              <th className="px-3 py-3 font-medium text-right">MIN</th>
               <th className="px-3 py-3 font-medium text-right">FPTS</th>
+              <th className="px-3 py-3 font-medium text-right">L5</th>
               <th className="px-3 py-3 font-medium text-right">PTS</th>
               <th className="px-3 py-3 font-medium text-right">REB</th>
               <th className="px-3 py-3 font-medium text-right">AST</th>
@@ -174,8 +265,8 @@ export default function BoxScore() {
           <tbody className="divide-y divide-border">
             {visiblePlayers.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-10 text-center text-muted-foreground text-sm">
-                  No favorited players on this team.
+                <td colSpan={11} className="px-4 py-10 text-center text-muted-foreground text-sm">
+                  No players match the current filters.
                 </td>
               </tr>
             ) : (
@@ -184,6 +275,7 @@ export default function BoxScore() {
               const isComparing = comparison.isSelected(player.id);
               const disableAdd = comparison.isFull && !isComparing;
               const isFavorite = favorites.isFavorite(player.id);
+              const form = recentForm.getForm(player.id);
               return (
                 <tr key={player.id} className="hover:bg-muted/20 transition-colors">
                   <td className="px-2 py-3 text-center">
@@ -194,13 +286,25 @@ export default function BoxScore() {
                     />
                   </td>
                   <td className="px-4 py-3 sticky left-10 bg-card z-10 shadow-[1px_0_0_0_var(--color-border)]">
-                    <div className="flex flex-col">
-                      <span className="font-semibold text-foreground truncate max-w-[120px]">{player.name}</span>
-                      <span className="text-xs text-muted-foreground">#{player.number} • {player.position}</span>
+                    <div className="flex flex-col gap-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-semibold text-foreground truncate max-w-[110px]">{player.name}</span>
+                        <InjuryBadge status={player.injuryStatus} />
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        #{player.number} • {player.position}
+                        {activeTab === "all" && ` • ${player.teamAbbreviation}`}
+                      </span>
                     </div>
+                  </td>
+                  <td className="px-3 py-3 text-right tabular-nums text-muted-foreground">
+                    {player.stats.minutes ?? "-"}
                   </td>
                   <td className="px-3 py-3 text-right font-bold text-primary tabular-nums">
                     {fpts.toFixed(1)}
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    <RecentFormBadge entries={form} />
                   </td>
                   <td className="px-3 py-3 text-right tabular-nums">{player.stats.points}</td>
                   <td className="px-3 py-3 text-right tabular-nums">{player.stats.rebounds}</td>
