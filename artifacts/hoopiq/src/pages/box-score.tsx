@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Link } from "wouter";
 import { MobileLayout } from "../components/layout";
+import { CompareBar } from "../components/compare-bar";
 import { fetchGameById } from "../api";
 import { calculateFantasyPoints } from "../lib/stats";
+import { useComparisonSelection } from "../hooks/use-comparison-selection";
 import { Game } from "../lib/types";
 
 export default function BoxScore() {
@@ -12,6 +14,7 @@ export default function BoxScore() {
 
   const [game, setGame] = useState<Game | null | undefined>(null);
   const [activeTab, setActiveTab] = useState<"away" | "home">("away");
+  const comparison = useComparisonSelection(gameId);
 
   useEffect(() => {
     let cancelled = false;
@@ -130,11 +133,14 @@ export default function BoxScore() {
               <th className="px-3 py-3 font-medium text-right">STL</th>
               <th className="px-3 py-3 font-medium text-right">BLK</th>
               <th className="px-3 py-3 font-medium text-right">TO</th>
+              <th className="px-3 py-3 font-medium text-center">Compare</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {activeTeam.players.map((player) => {
               const fpts = calculateFantasyPoints(player.stats);
+              const isComparing = comparison.isSelected(player.id);
+              const disableAdd = comparison.isFull && !isComparing;
               return (
                 <tr key={player.id} className="hover:bg-muted/20 transition-colors">
                   <td className="px-4 py-3 sticky left-0 bg-card z-10 shadow-[1px_0_0_0_var(--color-border)]">
@@ -152,12 +158,30 @@ export default function BoxScore() {
                   <td className="px-3 py-3 text-right tabular-nums">{player.stats.steals}</td>
                   <td className="px-3 py-3 text-right tabular-nums">{player.stats.blocks}</td>
                   <td className="px-3 py-3 text-right tabular-nums text-muted-foreground">{player.stats.turnovers}</td>
+                  <td className="px-3 py-3 text-center">
+                    <button
+                      type="button"
+                      disabled={disableAdd}
+                      onClick={() => comparison.toggle(player.id)}
+                      className={`text-xs font-semibold rounded-md px-2.5 py-1 border transition-colors ${
+                        isComparing
+                          ? "bg-primary text-primary-foreground border-primary-border"
+                          : disableAdd
+                            ? "border-border text-muted-foreground opacity-50 cursor-not-allowed"
+                            : "border-border text-foreground hover:bg-muted/40"
+                      }`}
+                    >
+                      {isComparing ? "Added" : "Compare"}
+                    </button>
+                  </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
+
+      <CompareBar league={game.league} gameId={game.id} count={comparison.selectedIds.length} />
     </MobileLayout>
   );
 }

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams } from "wouter";
 import { MobileLayout } from "../components/layout";
+import { CompareBar } from "../components/compare-bar";
 import { fetchGameById } from "../api";
 import { calculateFantasyPoints } from "../lib/stats";
 import {
@@ -11,6 +12,7 @@ import {
   setStoredBudget,
   setStoredPlayerCredits,
 } from "../lib/fantasy-storage";
+import { useComparisonSelection } from "../hooks/use-comparison-selection";
 import { Game, Player } from "../lib/types";
 
 type SortKey = "fpts" | "points" | "rebounds" | "assists" | "credits";
@@ -39,6 +41,7 @@ export default function FantasyOptimizer() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("fpts");
+  const comparison = useComparisonSelection(gameId);
 
   useEffect(() => {
     setBudget(getStoredBudget());
@@ -309,7 +312,7 @@ export default function FantasyOptimizer() {
                     </div>
                   </div>
 
-                  <div className="flex flex-col items-end gap-1 shrink-0">
+                  <div className="flex flex-col items-end gap-1.5 shrink-0">
                     <span className="text-sm font-bold text-primary tabular-nums">
                       {player.fpts.toFixed(1)} FPTS
                     </span>
@@ -323,6 +326,29 @@ export default function FantasyOptimizer() {
                       onChange={(e) => handleCreditsChange(player.id, e.target.value)}
                       className="w-16 h-8 rounded-md border border-input bg-transparent px-2 text-right text-sm font-semibold tabular-nums shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     />
+                    {(() => {
+                      const isComparing = comparison.isSelected(player.id);
+                      const disableAdd = comparison.isFull && !isComparing;
+                      return (
+                        <button
+                          type="button"
+                          disabled={disableAdd}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            comparison.toggle(player.id);
+                          }}
+                          className={`text-[11px] font-semibold rounded-md px-2 py-1 border transition-colors ${
+                            isComparing
+                              ? "bg-primary text-primary-foreground border-primary-border"
+                              : disableAdd
+                                ? "border-border text-muted-foreground opacity-50 cursor-not-allowed"
+                                : "border-border text-foreground hover:bg-muted/40"
+                          }`}
+                        >
+                          {isComparing ? "Added" : "Compare"}
+                        </button>
+                      );
+                    })()}
                   </div>
                 </div>
               );
@@ -330,6 +356,8 @@ export default function FantasyOptimizer() {
           )}
         </div>
       </div>
+
+      <CompareBar league={league} gameId={gameId || ""} count={comparison.selectedIds.length} />
     </MobileLayout>
   );
 }

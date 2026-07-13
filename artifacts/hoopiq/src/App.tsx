@@ -9,6 +9,7 @@ import LeagueGames from './pages/league-games';
 import BoxScore from './pages/box-score';
 import FantasyOptimizer from './pages/fantasy-optimizer';
 import PlayByPlay from './pages/play-by-play';
+import PlayerComparison from './pages/player-comparison';
 
 const queryClient = new QueryClient();
 
@@ -19,6 +20,7 @@ function Router() {
       <Route path="/:league" component={LeagueGames} />
       <Route path="/:league/game/:id/optimizer" component={FantasyOptimizer} />
       <Route path="/:league/game/:id/plays" component={PlayByPlay} />
+      <Route path="/:league/game/:id/compare" component={PlayerComparison} />
       <Route path="/:league/game/:id" component={BoxScore} />
       <Route component={NotFound} />
     </Switch>

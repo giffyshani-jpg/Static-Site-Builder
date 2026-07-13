@@ -5,6 +5,17 @@ export type PlayerStats = {
   steals: number;
   blocks: number;
   turnovers: number;
+  // Bonus fields parsed by the ESPN provider beyond the six
+  // fantasy-relevant stats above. Not guaranteed present for every
+  // player/game (e.g. pre-game rosters), so all optional.
+  minutes?: string | null;
+  fieldGoals?: string | null;
+  threePointers?: string | null;
+  freeThrows?: string | null;
+  offensiveRebounds?: number;
+  defensiveRebounds?: number;
+  personalFouls?: number;
+  plusMinus?: number;
 };
 
 export type Player = {
