@@ -1,0 +1,1 @@
+- [HoopIQ artifact registration](hoopiq-artifact-registration.md) — artifact was cloned, not scaffolded; createArtifact fails if dir exists; must remove dir first then recreate to get proxy routing.

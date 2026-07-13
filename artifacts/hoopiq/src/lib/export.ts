@@ -14,21 +14,34 @@ function download(filename: string, blob: Blob): void {
   URL.revokeObjectURL(url);
 }
 
+export type PlayerExportRole = "Captain" | "Vice Captain" | "";
+
 export type OptimizerExportPlayer = {
   name: string;
   teamAbbreviation: string;
   position: string;
+  /** Effective FPTS after role multiplier has been applied. */
   fpts: number;
+  /** Base FPTS before multiplier (same as fpts for non-captain/VC). */
+  baseFpts: number;
   credits: number;
+  role: PlayerExportRole;
 };
 
 export function exportOptimizerSelectionAsText(players: OptimizerExportPlayer[], gameLabel: string): void {
+  const roleTag = (role: PlayerExportRole) => (role ? ` [${role}]` : "");
+  const multiplierNote = (role: PlayerExportRole, baseFpts: number, effectiveFpts: number) => {
+    if (role === "Captain") return ` (${baseFpts.toFixed(1)} × 2)`;
+    if (role === "Vice Captain") return ` (${baseFpts.toFixed(1)} × 1.5)`;
+    return "";
+  };
   const lines = [
-    `HoopIQ Fantasy Optimizer — ${gameLabel}`,
+    `HoopIQ Fantasy Lineup — ${gameLabel}`,
     `Generated ${new Date().toLocaleString()}`,
     "",
     ...players.map(
-      (p) => `${p.name} (${p.teamAbbreviation} \u00b7 ${p.position}) \u2014 ${p.fpts.toFixed(1)} FPTS, ${p.credits} credits`,
+      (p) =>
+        `${p.name}${roleTag(p.role)} (${p.teamAbbreviation} \u00b7 ${p.position}) \u2014 ${p.fpts.toFixed(1)} FPTS${multiplierNote(p.role, p.baseFpts, p.fpts)}, ${p.credits} credits`,
     ),
     "",
     `Total: ${players.reduce((sum, p) => sum + p.fpts, 0).toFixed(1)} FPTS, ${players.reduce((sum, p) => sum + p.credits, 0)} credits`,
