@@ -20,10 +20,15 @@ import {
   MAX_SAME_TEAM,
   LineupState,
   PlayerRole,
+  SavedLineup,
   ValidationError,
+  deleteSavedLineup,
   fptsMultiplier,
   getPlayerRole,
+  getSavedLineups,
   getStoredLineup,
+  renameSavedLineup,
+  saveLineup,
   setStoredLineup,
   validateLineup,
 } from "../lib/lineup-storage";
@@ -104,6 +109,16 @@ export default function FantasyOptimizer() {
     viceCaptainId: null,
   });
 
+  // ── Saved lineups state ──────────────────────────────────────────────────
+  const [savedLineups, setSavedLineups] = useState<SavedLineup[]>([]);
+  const [saveNameInput, setSaveNameInput] = useState("");
+  const [saveNameError, setSaveNameError] = useState<"empty_name" | "duplicate" | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameInput, setRenameInput] = useState("");
+  const [renameError, setRenameError] = useState<"empty_name" | "duplicate" | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("fpts");
   const [teamFilter, setTeamFilter] = useState<TeamFilter>("all");
@@ -180,6 +195,9 @@ export default function FantasyOptimizer() {
               ? saved.viceCaptainId
               : null;
           setLineup({ playerIds: restoredIds, captainId: restoredCaptain, viceCaptainId: restoredVC });
+
+          // Load the list of saved lineups for this game.
+          setSavedLineups(getSavedLineups(gameId));
         }
       }
     });
@@ -365,6 +383,72 @@ export default function FantasyOptimizer() {
       const next = { ...prev };
       for (const id of playerIds) next[id] = undefined;
       return next;
+    });
+  }
+
+  // ── Saved lineups handlers ───────────────────────────────────────────────
+
+  function handleSaveLineup() {
+    if (!gameId) return;
+    setSaveNameError(null);
+    setSaveSuccess(false);
+    const result = saveLineup(gameId, saveNameInput, lineup);
+    if ("error" in result) {
+      setSaveNameError(result.error);
+      return;
+    }
+    setSavedLineups(getSavedLineups(gameId));
+    setSaveNameInput("");
+    setSaveSuccess(true);
+    setTimeout(() => setSaveSuccess(false), 2500);
+  }
+
+  function handleLoadLineup(saved: SavedLineup, allPlayerIds: Set<string>) {
+    const restoredIds = saved.lineup.playerIds.filter((id) => allPlayerIds.has(id));
+    const restoredCaptain =
+      saved.lineup.captainId && restoredIds.includes(saved.lineup.captainId)
+        ? saved.lineup.captainId
+        : null;
+    const restoredVC =
+      saved.lineup.viceCaptainId &&
+      restoredIds.includes(saved.lineup.viceCaptainId) &&
+      saved.lineup.viceCaptainId !== restoredCaptain
+        ? saved.lineup.viceCaptainId
+        : null;
+    applyLineup({ playerIds: restoredIds, captainId: restoredCaptain, viceCaptainId: restoredVC });
+  }
+
+  function handleDeleteLineup(id: string) {
+    if (!gameId) return;
+    deleteSavedLineup(gameId, id);
+    setSavedLineups(getSavedLineups(gameId));
+    setDeleteConfirmId(null);
+  }
+
+  function handleStartRename(saved: SavedLineup) {
+    setRenamingId(saved.id);
+    setRenameInput(saved.name);
+    setRenameError(null);
+  }
+
+  function handleCommitRename(id: string) {
+    if (!gameId) return;
+    const result = renameSavedLineup(gameId, id, renameInput);
+    if ("error" in result) {
+      setRenameError(result.error);
+      return;
+    }
+    setSavedLineups(getSavedLineups(gameId));
+    setRenamingId(null);
+    setRenameError(null);
+  }
+
+  function formatSavedAt(ts: number): string {
+    return new Date(ts).toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   }
 
@@ -565,6 +649,181 @@ export default function FantasyOptimizer() {
             <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-sky-500 text-sky-950 font-black text-[9px] shrink-0">VC</span>
             Vice Captain × 1.5
           </span>
+        </div>
+
+        {/* ── Saved Lineups ─────────────────────────────────────────────── */}
+        <div className="mx-4 mt-4 rounded-xl border border-border bg-card overflow-hidden">
+          {/* Header */}
+          <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-2">
+            <span className="text-xs font-bold tracking-wider uppercase text-foreground">
+              Saved Lineups
+            </span>
+            <span className="text-[11px] text-muted-foreground tabular-nums">
+              {savedLineups.length} saved
+            </span>
+          </div>
+
+          {/* Save current lineup form */}
+          <div className="px-4 py-3 border-b border-border flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Name this lineup…"
+                value={saveNameInput}
+                onChange={(e) => { setSaveNameInput(e.target.value); setSaveNameError(null); setSaveSuccess(false); }}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSaveLineup(); }}
+                maxLength={50}
+                className={`flex-1 h-9 rounded-md border px-3 text-sm bg-transparent shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
+                  saveNameError ? "border-destructive" : "border-input"
+                }`}
+              />
+              <button
+                type="button"
+                onClick={handleSaveLineup}
+                disabled={!saveNameInput.trim()}
+                className="h-9 px-4 text-xs font-bold rounded-md border border-primary-border text-primary hover:bg-primary/10 transition-colors active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+              >
+                Save
+              </button>
+            </div>
+            {saveNameError === "duplicate" && (
+              <p className="text-[11px] text-destructive">A lineup with that name already exists.</p>
+            )}
+            {saveNameError === "empty_name" && (
+              <p className="text-[11px] text-destructive">Please enter a name before saving.</p>
+            )}
+            {saveSuccess && (
+              <p className="text-[11px] text-emerald-400 font-semibold">Lineup saved successfully.</p>
+            )}
+          </div>
+
+          {/* Saved lineup list */}
+          {savedLineups.length === 0 ? (
+            <div className="px-4 py-5 text-center text-xs text-muted-foreground italic">
+              No saved lineups yet. Name and save your current lineup above.
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {savedLineups.map((saved) => {
+                const allPlayerIds = new Set(players.map((p) => p.id));
+                const validCount = saved.lineup.playerIds.filter((id) => allPlayerIds.has(id)).length;
+                const isRenaming = renamingId === saved.id;
+                const isConfirmingDelete = deleteConfirmId === saved.id;
+
+                return (
+                  <div key={saved.id} className="px-4 py-3 flex flex-col gap-2">
+                    {/* Name row */}
+                    {isRenaming ? (
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            autoFocus
+                            value={renameInput}
+                            onChange={(e) => { setRenameInput(e.target.value); setRenameError(null); }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleCommitRename(saved.id);
+                              if (e.key === "Escape") { setRenamingId(null); setRenameError(null); }
+                            }}
+                            maxLength={50}
+                            className={`flex-1 h-8 rounded-md border px-3 text-sm bg-transparent shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
+                              renameError ? "border-destructive" : "border-input"
+                            }`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleCommitRename(saved.id)}
+                            className="h-8 px-3 text-[11px] font-bold rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shrink-0"
+                          >
+                            OK
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setRenamingId(null); setRenameError(null); }}
+                            className="h-8 px-2 text-[11px] font-semibold rounded-md border border-border text-muted-foreground hover:bg-muted/40 transition-colors shrink-0"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                        {renameError === "duplicate" && (
+                          <p className="text-[11px] text-destructive">That name is already taken.</p>
+                        )}
+                        {renameError === "empty_name" && (
+                          <p className="text-[11px] text-destructive">Name cannot be empty.</p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-foreground truncate">{saved.name}</p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            {formatSavedAt(saved.savedAt)} · {validCount}/{LINEUP_SIZE} players
+                            {saved.lineup.captainId && (
+                              <>
+                                {" "}·{" "}
+                                <span className="text-yellow-400 font-semibold">
+                                  C: {players.find((p) => p.id === saved.lineup.captainId)?.name ?? "—"}
+                                </span>
+                              </>
+                            )}
+                          </p>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleLoadLineup(saved, allPlayerIds)}
+                            className="h-7 px-2.5 text-[11px] font-bold rounded-md border border-primary-border text-primary hover:bg-primary/10 transition-colors"
+                            title="Load this lineup"
+                          >
+                            Load
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleStartRename(saved)}
+                            className="h-7 px-2 text-[11px] font-semibold rounded-md border border-border text-muted-foreground hover:bg-muted/40 transition-colors"
+                            title="Rename"
+                          >
+                            Rename
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteConfirmId(saved.id)}
+                            className="h-7 px-2 text-[11px] font-semibold rounded-md border border-border text-muted-foreground hover:text-destructive hover:border-destructive/40 transition-colors"
+                            title="Delete"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Delete confirmation inline */}
+                    {isConfirmingDelete && !isRenaming && (
+                      <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2">
+                        <p className="text-xs text-destructive flex-1">Delete "{saved.name}"?</p>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteLineup(saved.id)}
+                          className="h-7 px-3 text-[11px] font-bold rounded-md bg-destructive text-white hover:bg-destructive/90 transition-colors shrink-0"
+                        >
+                          Delete
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteConfirmId(null)}
+                          className="h-7 px-2 text-[11px] font-semibold rounded-md border border-border text-muted-foreground hover:bg-muted/40 transition-colors shrink-0"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* ── Search + Sort + Filters ───────────────────────────────────── */}

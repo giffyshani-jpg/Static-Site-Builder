@@ -127,3 +127,110 @@ export function fptsMultiplier(role: PlayerRole): number {
   if (role === "vice_captain") return 1.5;
   return 1;
 }
+
+// ── Saved Lineups ─────────────────────────────────────────────────────────────
+//
+// Multiple named lineup snapshots can be saved per game, stored as a JSON
+// array under "hoopiq:saved-lineups:{gameId}". Each entry is fully
+// self-contained (deep snapshot of LineupState) so loading never depends on
+// the player list being in a particular order.
+
+export type SavedLineup = {
+  /** Unique identifier for this saved entry. */
+  id: string;
+  /** User-given name. Unique (case-insensitive) within the same game. */
+  name: string;
+  /** Unix timestamp (ms) when the lineup was saved. */
+  savedAt: number;
+  /** Full snapshot of the lineup at save time. */
+  lineup: LineupState;
+};
+
+const SAVED_LINEUPS_PREFIX = "hoopiq:saved-lineups:";
+
+function savedLineupsKey(gameId: string): string {
+  return `${SAVED_LINEUPS_PREFIX}${gameId}`;
+}
+
+function parseSavedLineups(raw: string): SavedLineup[] {
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (item): item is SavedLineup =>
+        typeof item === "object" &&
+        item !== null &&
+        typeof item.id === "string" &&
+        typeof item.name === "string" &&
+        typeof item.savedAt === "number" &&
+        typeof item.lineup === "object" &&
+        item.lineup !== null,
+    );
+  } catch {
+    return [];
+  }
+}
+
+function writeSavedLineups(gameId: string, lineups: SavedLineup[]): void {
+  if (!hasStorage() || !gameId) return;
+  window.localStorage.setItem(savedLineupsKey(gameId), JSON.stringify(lineups));
+}
+
+/** Return all saved lineups for a game, sorted newest-first. */
+export function getSavedLineups(gameId: string): SavedLineup[] {
+  if (!hasStorage() || !gameId) return [];
+  const raw = window.localStorage.getItem(savedLineupsKey(gameId));
+  if (!raw) return [];
+  return parseSavedLineups(raw).sort((a, b) => b.savedAt - a.savedAt);
+}
+
+/** Save the current lineup under the given name. */
+export function saveLineup(
+  gameId: string,
+  name: string,
+  lineup: LineupState,
+): { saved: SavedLineup } | { error: "empty_name" | "duplicate" } {
+  const trimmed = name.trim();
+  if (!trimmed) return { error: "empty_name" };
+  const existing = getSavedLineups(gameId);
+  if (existing.some((s) => s.name.toLowerCase() === trimmed.toLowerCase())) {
+    return { error: "duplicate" };
+  }
+  const entry: SavedLineup = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    name: trimmed,
+    savedAt: Date.now(),
+    lineup: {
+      playerIds: [...lineup.playerIds],
+      captainId: lineup.captainId,
+      viceCaptainId: lineup.viceCaptainId,
+    },
+  };
+  writeSavedLineups(gameId, [entry, ...existing]);
+  return { saved: entry };
+}
+
+/** Permanently remove a saved lineup by id. */
+export function deleteSavedLineup(gameId: string, id: string): void {
+  const existing = getSavedLineups(gameId);
+  writeSavedLineups(gameId, existing.filter((s) => s.id !== id));
+}
+
+/** Rename a saved lineup. Returns an error when the new name is already taken. */
+export function renameSavedLineup(
+  gameId: string,
+  id: string,
+  newName: string,
+): { ok: true } | { error: "empty_name" | "duplicate" } {
+  const trimmed = newName.trim();
+  if (!trimmed) return { error: "empty_name" };
+  const existing = getSavedLineups(gameId);
+  if (existing.some((s) => s.id !== id && s.name.toLowerCase() === trimmed.toLowerCase())) {
+    return { error: "duplicate" };
+  }
+  writeSavedLineups(
+    gameId,
+    existing.map((s) => (s.id === id ? { ...s, name: trimmed } : s)),
+  );
+  return { ok: true };
+}
