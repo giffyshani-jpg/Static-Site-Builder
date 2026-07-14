@@ -44,6 +44,8 @@ import {
   matchOcrLinesToPlayers,
 } from "../lib/ocr-import";
 import type { OcrProgress } from "../lib/ocr-import";
+import { inactiveStatusLabel, minutesValue, playerSortTier } from "../lib/player-status";
+import { computeSavedLineupLiveStats } from "../lib/lineup-live";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -66,11 +68,6 @@ type OptimizerPlayer = Player & {
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function minutesValue(stats: Player["stats"]): number {
-  const parsed = stats.minutes ? parseFloat(stats.minutes) : NaN;
-  return Number.isFinite(parsed) ? parsed : 0;
-}
 
 function roleBadgeClasses(role: PlayerRole): string {
   if (role === "captain") return "bg-yellow-500 text-yellow-950 border-yellow-400";
@@ -131,6 +128,7 @@ export default function FantasyOptimizer() {
   const [teamFilter, setTeamFilter] = useState<TeamFilter>("all");
   const [positionFilter, setPositionFilter] = useState("all");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [avoidUsedPlayers, setAvoidUsedPlayers] = useState(false);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
 
   // ── Live update state ──────────────────────────────────────────────────
@@ -159,13 +157,21 @@ export default function FantasyOptimizer() {
     setTeamFilter(prefs.teamFilter);
     setPositionFilter(prefs.position);
     setFavoritesOnly(prefs.favoritesOnly);
+    setAvoidUsedPlayers(prefs.avoidUsedPlayers ?? false);
     setPrefsLoaded(true);
   }, []);
 
   useEffect(() => {
     if (!prefsLoaded) return;
-    setOptimizerPrefs({ sortKey, sortDir, teamFilter, position: positionFilter, favoritesOnly });
-  }, [prefsLoaded, sortKey, sortDir, teamFilter, positionFilter, favoritesOnly]);
+    setOptimizerPrefs({
+      sortKey,
+      sortDir,
+      teamFilter,
+      position: positionFilter,
+      favoritesOnly,
+      avoidUsedPlayers,
+    });
+  }, [prefsLoaded, sortKey, sortDir, teamFilter, positionFilter, favoritesOnly, avoidUsedPlayers]);
 
   useEffect(() => {
     setBudget(getStoredBudget());
@@ -281,6 +287,15 @@ export default function FantasyOptimizer() {
     [players],
   );
 
+  /** Union of player ids that appear in any *other* saved lineup for this game. */
+  const usedInSavedLineups = useMemo(() => {
+    const set = new Set<string>();
+    for (const saved of savedLineups) {
+      for (const id of saved.lineup.playerIds) set.add(id);
+    }
+    return set;
+  }, [savedLineups]);
+
   /** Players visible in the scrollable list after all search/filter/sort. */
   const visiblePlayers = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -314,15 +329,49 @@ export default function FantasyOptimizer() {
       return desc ? -diff : diff;
     });
 
-    // Favorites always bubble to the top on top of whatever sort is active.
+    // Favorites bubble to the top on top of whatever sort is active.
     sorted.sort((a, b) => {
       const aFav = favorites.isFavorite(a.id) ? 1 : 0;
       const bFav = favorites.isFavorite(b.id) ? 1 : 0;
       return bFav - aFav;
     });
 
+    // Opt-in: players already used in another saved lineup sort after
+    // unused ones, but stay fully visible/selectable — never hidden.
+    if (avoidUsedPlayers) {
+      sorted.sort((a, b) => {
+        const aUsed = !lineup.playerIds.includes(a.id) && usedInSavedLineups.has(a.id) ? 1 : 0;
+        const bUsed = !lineup.playerIds.includes(b.id) && usedInSavedLineups.has(b.id) ? 1 : 0;
+        return aUsed - bUsed;
+      });
+    }
+
+    // Final, most significant grouping: selected players always first,
+    // remaining active players next, OUT/DNP/Inactive/Not-in-lineup last —
+    // regardless of the sort/filter above (which still applies within each
+    // group, since all the sorts above are stable).
+    sorted.sort((a, b) => {
+      const aTier = playerSortTier(a, game?.status ?? "scheduled", lineup.playerIds.includes(a.id));
+      const bTier = playerSortTier(b, game?.status ?? "scheduled", lineup.playerIds.includes(b.id));
+      return aTier - bTier;
+    });
+
     return sorted;
-  }, [players, credits, search, sortKey, teamFilter, positionFilter, favorites, favoritesOnly]);
+  }, [
+    players,
+    credits,
+    search,
+    sortKey,
+    sortDir,
+    teamFilter,
+    positionFilter,
+    favorites,
+    favoritesOnly,
+    avoidUsedPlayers,
+    usedInSavedLineups,
+    lineup.playerIds,
+    game?.status,
+  ]);
 
   // ── Lineup helpers ───────────────────────────────────────────────────────
 
@@ -830,6 +879,16 @@ export default function FantasyOptimizer() {
                 const validCount = saved.lineup.playerIds.filter((id) => allPlayerIds.has(id)).length;
                 const isRenaming = renamingId === saved.id;
                 const isConfirmingDelete = deleteConfirmId === saved.id;
+                const liveStats = computeSavedLineupLiveStats(
+                  saved.lineup,
+                  players,
+                  game.status,
+                  (playerId) => {
+                    const entries = recentForm.getForm(playerId);
+                    if (entries.length === 0) return null;
+                    return entries.reduce((sum, e) => sum + e.fpts, 0) / entries.length;
+                  },
+                );
 
                 return (
                   <div key={saved.id} className="px-4 py-3 flex flex-col gap-2">
@@ -887,6 +946,16 @@ export default function FantasyOptimizer() {
                                 </span>
                               </>
                             )}
+                          </p>
+                          {/* Live totals — always current, no need to load the lineup. */}
+                          <p className="text-[11px] mt-1 flex items-center gap-1.5 flex-wrap tabular-nums">
+                            <span className="font-bold text-primary">{liveStats.liveFpts.toFixed(1)} live FP</span>
+                            <span className="text-muted-foreground">·</span>
+                            <span className="text-muted-foreground">{liveStats.projectedFpts.toFixed(1)} proj FP</span>
+                            <span className="text-muted-foreground">·</span>
+                            <span className="text-muted-foreground">{liveStats.playersPlaying} playing</span>
+                            <span className="text-muted-foreground">·</span>
+                            <span className="text-muted-foreground">{liveStats.playersFinished} finished</span>
                           </p>
                         </div>
 
@@ -1211,6 +1280,24 @@ export default function FantasyOptimizer() {
               />
             </button>
           </div>
+
+          {/* Avoid players already used in previous saved teams */}
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs font-medium text-muted-foreground">
+              Avoid players already used in previous saved teams
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={avoidUsedPlayers}
+              onClick={() => setAvoidUsedPlayers((v) => !v)}
+              className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${avoidUsedPlayers ? "bg-primary" : "bg-muted"}`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${avoidUsedPlayers ? "translate-x-4" : "translate-x-0"}`}
+              />
+            </button>
+          </div>
         </div>
 
         {/* ── Player list ───────────────────────────────────────────────── */}
@@ -1225,6 +1312,9 @@ export default function FantasyOptimizer() {
               const role = getPlayerRole(player.id, lineup);
               const effectiveFpts = player.baseFpts * fptsMultiplier(role);
               const isOverLimit = lineup.playerIds.length >= LINEUP_SIZE && !isInLineup;
+              const statusLabel = inactiveStatusLabel(player, game.status);
+              const isUsedElsewhere =
+                avoidUsedPlayers && !isInLineup && usedInSavedLineups.has(player.id);
 
               return (
                 <div
@@ -1264,7 +1354,12 @@ export default function FantasyOptimizer() {
                       <span className="text-[10px] font-semibold uppercase text-muted-foreground shrink-0">
                         {player.teamAbbreviation}
                       </span>
-                      <InjuryBadge status={player.injuryStatus} />
+                      <InjuryBadge status={statusLabel ?? undefined} />
+                      {isUsedElsewhere && (
+                        <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground italic shrink-0">
+                          used
+                        </span>
+                      )}
                     </div>
                     <div className="text-xs text-muted-foreground">
                       #{player.number} · {player.position} · {player.stats.minutes ?? "-"} MIN

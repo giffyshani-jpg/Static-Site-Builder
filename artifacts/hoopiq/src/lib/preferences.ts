@@ -61,6 +61,12 @@ export type OptimizerPrefs = {
   teamFilter: TeamFilter;
   position: string; // "all" or a specific position abbreviation
   favoritesOnly: boolean;
+  /**
+   * When true, players who already appear in another saved lineup for this
+   * game sort after unused players (they remain fully visible/selectable —
+   * never hidden or disabled). Opt-in; defaults to false.
+   */
+  avoidUsedPlayers: boolean;
 };
 
 const OPTIMIZER_PREFS_KEY = "hoopiq:optimizer-prefs";
@@ -71,6 +77,7 @@ const DEFAULT_OPTIMIZER_PREFS: OptimizerPrefs = {
   teamFilter: "all",
   position: "all",
   favoritesOnly: false,
+  avoidUsedPlayers: false,
 };
 
 export function getOptimizerPrefs(): OptimizerPrefs {

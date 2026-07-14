@@ -17,6 +17,7 @@ import {
   setLastGame,
 } from "../lib/preferences";
 import { Player } from "../lib/types";
+import { inactiveStatusLabel, minutesValue, playerSortTier } from "../lib/player-status";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -26,11 +27,6 @@ type BoxSortKey = "min" | "fpts" | "pts" | "reb" | "ast" | "stl" | "blk" | "to";
 type SortDir = "asc" | "desc";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function minutesValue(stats: Player["stats"]): number {
-  const parsed = stats.minutes ? parseFloat(stats.minutes) : NaN;
-  return Number.isFinite(parsed) ? parsed : 0;
-}
 
 function compareBySort(
   a: RosterPlayer,
@@ -190,8 +186,19 @@ export default function BoxScore() {
       return bFav - aFav;
     });
 
+    // OUT/DNP/Inactive/Not-in-lineup always sink to the bottom, regardless
+    // of the sort column or favorite status above (both stable, so order
+    // within each group is preserved).
+    if (game) {
+      sorted.sort((a, b) => {
+        const aTier = playerSortTier(a, game.status, false);
+        const bTier = playerSortTier(b, game.status, false);
+        return aTier - bTier;
+      });
+    }
+
     return sorted;
-  }, [rosterPlayers, positionFilter, favorites, favoritesOnly, sortKey, sortDir]);
+  }, [rosterPlayers, positionFilter, favorites, favoritesOnly, sortKey, sortDir, game]);
 
   // ── Loading / error states ─────────────────────────────────────────────────
 
@@ -394,7 +401,7 @@ export default function BoxScore() {
                       <div className="flex flex-col gap-0.5">
                         <div className="flex items-center gap-1.5">
                           <span className="font-semibold text-foreground truncate max-w-[110px]">{player.name}</span>
-                          <InjuryBadge status={player.injuryStatus} />
+                          <InjuryBadge status={inactiveStatusLabel(player, game.status) ?? undefined} />
                         </div>
                         <span className="text-xs text-muted-foreground">
                           #{player.number} • {player.position}

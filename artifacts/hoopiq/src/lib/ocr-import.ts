@@ -23,12 +23,74 @@ export type OcrMatchResult = {
 
 // ── String normalization ──────────────────────────────────────────────────────
 
+// Common generational/suffix tokens that show up after a surname and would
+// otherwise corrupt "last word = last name" matching (e.g. "James Jr." would
+// treat "jr" as the last name instead of "james").
+const SUFFIXES = new Set(["jr", "sr", "ii", "iii", "iv", "v"]);
+
+// Small set of common first-name nicknames/abbreviations seen in fantasy
+// screenshots. Bidirectional: either side may be the short or long form.
+const NICKNAMES: Record<string, string[]> = {
+  steph: ["stephen"],
+  mike: ["michael"],
+  chris: ["christopher"],
+  alex: ["alexander"],
+  nick: ["nicholas"],
+  rob: ["robert"],
+  bobby: ["robert"],
+  will: ["william"],
+  bill: ["william"],
+  joe: ["joseph"],
+  tony: ["anthony"],
+  ed: ["edward"],
+  eddie: ["edward"],
+  zach: ["zachary"],
+  matt: ["matthew"],
+  dan: ["daniel"],
+  danny: ["daniel"],
+  jimmy: ["james"],
+  jj: ["j.j.", "j j"],
+  cj: ["c.j.", "c j"],
+  tj: ["t.j.", "t j"],
+  pj: ["p.j.", "p j"],
+  dj: ["d.j.", "d j"],
+  kj: ["k.j.", "k j"],
+};
+
+/** Lowercase + strip anything but letters/spaces/apostrophes/periods/hyphens. */
 function normalize(s: string): string {
   return s
     .toLowerCase()
     .replace(/[^a-z\s'.\-]/g, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/** Fully punctuation- and whitespace-insensitive: letters only, no spaces. */
+function squash(s: string): string {
+  return normalize(s).replace(/[^a-z]/g, "");
+}
+
+/** Drops a trailing generational suffix word ("jr", "sr", "iii", ...). */
+function stripSuffix(words: string[]): string[] {
+  if (words.length > 1 && SUFFIXES.has(words[words.length - 1].replace(/\./g, ""))) {
+    return words.slice(0, -1);
+  }
+  return words;
+}
+
+/** Splits a normalized name into words with any trailing suffix removed. */
+function nameWords(normalized: string): string[] {
+  return stripSuffix(normalized.split(" ").filter(Boolean));
+}
+
+/** True if two first-name tokens are the same person, allowing nicknames. */
+function firstNamesMatch(a: string, b: string): boolean {
+  const na = a.replace(/\./g, "");
+  const nb = b.replace(/\./g, "");
+  if (na === nb) return true;
+  const expand = (short: string) => NICKNAMES[short]?.map((n) => n.replace(/\./g, "")) ?? [];
+  return expand(na).includes(nb) || expand(nb).includes(na);
 }
 
 // ── Levenshtein distance ──────────────────────────────────────────────────────
@@ -64,17 +126,51 @@ function similarity(ocrText: string, playerName: string): number {
   // Exact match after normalisation.
   if (a === b) return 1;
 
+  // Fully punctuation/whitespace-insensitive exact match (handles OCR
+  // dropping periods/apostrophes/hyphens/spaces: "OBrien" ~ "O'Brien",
+  // "PJ Washington" ~ "P.J. Washington", "LeBronJames" ~ "LeBron James").
+  const squashedA = squash(a);
+  const squashedB = squash(b);
+  if (squashedA && squashedA === squashedB) return 0.97;
+
+  const aWords = nameWords(a);
+  const bWords = nameWords(b);
+  const lastNameA = aWords[aWords.length - 1];
+  const lastNameB = bWords[bWords.length - 1];
+
   // Last-name-only match (very common in fantasy app screenshots where names
-  // are truncated or shown surname-first).
-  const bWords = b.split(" ");
-  const lastName = bWords[bWords.length - 1];
-  if (lastName.length >= 3 && a === lastName) return 0.88;
+  // are truncated or shown surname-first). Punctuation-insensitive too.
+  if (lastNameB.length >= 3 && aWords.length === 1 && squash(aWords[0]) === squash(lastNameB)) {
+    return 0.88;
+  }
+
+  // Full name match allowing nickname/abbreviation first names and
+  // suffix/punctuation differences, e.g. "Steph Curry" ~ "Stephen Curry",
+  // "CJ McCollum" ~ "C.J. McCollum".
+  if (
+    aWords.length >= 2 &&
+    bWords.length >= 2 &&
+    squash(lastNameA) === squash(lastNameB) &&
+    firstNamesMatch(aWords[0], bWords[0])
+  ) {
+    return 0.93;
+  }
 
   // First-letter + last-name (e.g. "L. James" → "LeBron James").
-  // Matches  "l james" against "lebron james"
-  if (bWords.length >= 2) {
-    const abbrev = `${bWords[0][0]} ${lastName}`;
-    if (normalize(abbrev) === a) return 0.85;
+  // Punctuation-insensitive: matches "l james", "l. james", and "ljames".
+  if (bWords.length >= 2 && lastNameB.length >= 2) {
+    const abbrevSquashed = `${bWords[0][0]}${squash(lastNameB)}`;
+    if (squashedA === abbrevSquashed) return 0.85;
+  }
+
+  // Common abbreviation first name (e.g. "cj" / "c.j." / "c j") + last name,
+  // independent of the nickname map above (covers initials not listed there).
+  if (aWords.length >= 2 && bWords.length >= 2 && squash(lastNameA) === squash(lastNameB)) {
+    const aInitials = squash(aWords.slice(0, -1).join(""));
+    const bFirstInitial = bWords[0][0];
+    if (aInitials.length >= 1 && aInitials.length <= 3 && aInitials[0] === bFirstInitial) {
+      return 0.82;
+    }
   }
 
   // Prefix of full name (truncated display names).
@@ -83,9 +179,11 @@ function similarity(ocrText: string, playerName: string): number {
   // Substring of full name.
   if (b.includes(a) && a.length >= 4) return 0.75;
 
-  // Levenshtein-based similarity.
-  const dist = levenshtein(a, b);
-  const maxLen = Math.max(a.length, b.length);
+  // Levenshtein-based similarity, computed on the squashed (punctuation- and
+  // whitespace-insensitive) forms so stray periods/hyphens/spaces from OCR
+  // don't tank an otherwise-close match.
+  const dist = levenshtein(squashedA, squashedB);
+  const maxLen = Math.max(squashedA.length, squashedB.length);
   if (maxLen === 0) return 1;
   return 1 - dist / maxLen;
 }
