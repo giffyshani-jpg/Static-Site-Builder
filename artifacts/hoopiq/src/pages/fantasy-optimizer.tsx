@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "wouter";
 import { MobileLayout } from "../components/layout";
 import { CompareBar } from "../components/compare-bar";
@@ -38,6 +38,12 @@ import { useRecentForm } from "../hooks/use-recent-form";
 import { TeamFilter, getOptimizerPrefs, setOptimizerPrefs } from "../lib/preferences";
 import { exportOptimizerSelectionAsText } from "../lib/export";
 import { Game, Player } from "../lib/types";
+import {
+  OcrMatchResult,
+  extractLinesFromImage,
+  matchOcrLinesToPlayers,
+} from "../lib/ocr-import";
+import type { OcrProgress } from "../lib/ocr-import";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -121,10 +127,24 @@ export default function FantasyOptimizer() {
 
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("fpts");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [teamFilter, setTeamFilter] = useState<TeamFilter>("all");
   const [positionFilter, setPositionFilter] = useState("all");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
+
+  // ── Live update state ──────────────────────────────────────────────────
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  // ── OCR import state ───────────────────────────────────────────────────
+  const [ocrExpanded, setOcrExpanded] = useState(false);
+  const [ocrPhase, setOcrPhase] = useState<OcrProgress["phase"] | "idle" | "error">("idle");
+  const [ocrPct, setOcrPct] = useState(0);
+  const [ocrError, setOcrError] = useState<string | null>(null);
+  const [ocrResults, setOcrResults] = useState<OcrMatchResult[] | null>(null);
+  /** Per-result manual overrides: result index → player id */
+  const [ocrManual, setOcrManual] = useState<Record<number, string>>({});
+  const ocrFileRef = useRef<HTMLInputElement>(null);
 
   const comparison = useComparisonSelection(gameId);
   const favorites = useFavorites();
@@ -135,6 +155,7 @@ export default function FantasyOptimizer() {
   useEffect(() => {
     const prefs = getOptimizerPrefs();
     setSortKey(prefs.sortKey as SortKey);
+    setSortDir(prefs.sortDir ?? "desc");
     setTeamFilter(prefs.teamFilter);
     setPositionFilter(prefs.position);
     setFavoritesOnly(prefs.favoritesOnly);
@@ -143,8 +164,8 @@ export default function FantasyOptimizer() {
 
   useEffect(() => {
     if (!prefsLoaded) return;
-    setOptimizerPrefs({ sortKey, teamFilter, position: positionFilter, favoritesOnly });
-  }, [prefsLoaded, sortKey, teamFilter, positionFilter, favoritesOnly]);
+    setOptimizerPrefs({ sortKey, sortDir, teamFilter, position: positionFilter, favoritesOnly });
+  }, [prefsLoaded, sortKey, sortDir, teamFilter, positionFilter, favoritesOnly]);
 
   useEffect(() => {
     setBudget(getStoredBudget());
@@ -171,6 +192,7 @@ export default function FantasyOptimizer() {
           initialCredits[player.id] = getStoredPlayerCredits(player.id);
         }
         setCredits(initialCredits);
+        setLastUpdated(new Date());
 
         // Record recent form for all players.
         if (gameId) {
@@ -207,6 +229,26 @@ export default function FantasyOptimizer() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId, league]);
+
+  // ── Live polling (5 s while game is in_progress) ──────────────────────────
+  // Only updates game data — never touches lineup, filter, or sort state.
+  useEffect(() => {
+    if (!game || game.status !== "in_progress" || !gameId) return;
+    let cancelled = false;
+    const id = setInterval(async () => {
+      const data = await fetchGameById(gameId, league);
+      if (cancelled) return;
+      const loaded = (data as Game | undefined) ?? undefined;
+      if (loaded) {
+        setGame(loaded);
+        setLastUpdated(new Date());
+      }
+    }, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [game?.status, gameId, league]);
 
   // ── Derived player list ──────────────────────────────────────────────────
 
@@ -256,16 +298,20 @@ export default function FantasyOptimizer() {
 
     const withCredits = filtered.map((p) => ({ ...p, credits: credits[p.id] ?? 0 }));
 
+    // sortDir "desc" = highest first (default); "asc" = lowest first.
+    const desc = sortDir === "desc";
     const sorted = [...withCredits].sort((a, b) => {
+      let diff: number;
       switch (sortKey) {
-        case "points":   return b.stats.points   - a.stats.points;
-        case "rebounds": return b.stats.rebounds - a.stats.rebounds;
-        case "assists":  return b.stats.assists  - a.stats.assists;
-        case "credits":  return b.credits        - a.credits;
-        case "minutes":  return minutesValue(b.stats) - minutesValue(a.stats);
+        case "points":   diff = a.stats.points   - b.stats.points;   break;
+        case "rebounds": diff = a.stats.rebounds - b.stats.rebounds; break;
+        case "assists":  diff = a.stats.assists  - b.stats.assists;  break;
+        case "credits":  diff = a.credits        - b.credits;        break;
+        case "minutes":  diff = minutesValue(a.stats) - minutesValue(b.stats); break;
         case "fpts":
-        default:         return b.baseFpts - a.baseFpts;
+        default:         diff = a.baseFpts - b.baseFpts; break;
       }
+      return desc ? -diff : diff;
     });
 
     // Favorites always bubble to the top on top of whatever sort is active.
@@ -296,7 +342,8 @@ export default function FantasyOptimizer() {
         viceCaptainId: lineup.viceCaptainId === playerId ? null : lineup.viceCaptainId,
       });
     } else {
-      // Add to lineup (no upper cap enforced here — validation surfaces the error).
+      // Hard cap: refuse to add a 9th player.
+      if (lineup.playerIds.length >= LINEUP_SIZE) return;
       applyLineup({ ...lineup, playerIds: [...lineup.playerIds, playerId] });
     }
   }
@@ -452,6 +499,66 @@ export default function FantasyOptimizer() {
     });
   }
 
+  // ── OCR handlers ─────────────────────────────────────────────────────────
+
+  async function handleOcrFileChange(file: File) {
+    setOcrPhase("loading");
+    setOcrError(null);
+    setOcrResults(null);
+    setOcrManual({});
+    try {
+      const lines = await extractLinesFromImage(file, (p: OcrProgress) => {
+        if (p.phase === "recognizing") {
+          setOcrPhase("recognizing");
+          setOcrPct(p.pct);
+        } else {
+          setOcrPhase(p.phase);
+        }
+      });
+      const knownPlayers = players.map((p) => ({ id: p.id, name: p.name }));
+      const results = matchOcrLinesToPlayers(lines, knownPlayers);
+      // De-duplicate identical OCR lines.
+      const seen = new Set<string>();
+      const filtered = results.filter((r) => {
+        const key = r.ocrText.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      setOcrResults(filtered);
+      setOcrPhase("done");
+    } catch (err) {
+      setOcrPhase("error");
+      setOcrError(err instanceof Error ? err.message : "OCR failed — please try a different image.");
+    }
+  }
+
+  function handleOcrApply() {
+    if (!ocrResults) return;
+    const selectedIds: string[] = [];
+    const usedIds = new Set<string>();
+
+    for (let i = 0; i < ocrResults.length; i++) {
+      const result = ocrResults[i];
+      const manualId = ocrManual[i];
+      const effectiveId = manualId || result.matchedPlayer?.id;
+      if (effectiveId && !usedIds.has(effectiveId)) {
+        selectedIds.push(effectiveId);
+        usedIds.add(effectiveId);
+      }
+      if (selectedIds.length >= LINEUP_SIZE) break;
+    }
+
+    const validIds = new Set(players.map((p) => p.id));
+    const rosteredIds = selectedIds.filter((id) => validIds.has(id));
+    applyLineup({ playerIds: rosteredIds, captainId: null, viceCaptainId: null });
+
+    setOcrExpanded(false);
+    setOcrResults(null);
+    setOcrPhase("idle");
+    setOcrManual({});
+  }
+
   // ── Export ───────────────────────────────────────────────────────────────
 
   function handleExportLineup() {
@@ -501,9 +608,23 @@ export default function FantasyOptimizer() {
 
         {/* ── Game context + budget ─────────────────────────────────────── */}
         <div className="p-4 border-b border-border bg-card flex flex-col gap-4">
-          <div className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-            {game.awayTeam.abbreviation} @ {game.homeTeam.abbreviation}
+          <div className="flex items-center gap-2 flex-wrap">
+            {game.status === "in_progress" && (
+              <span className="flex items-center gap-1 text-[10px] font-bold uppercase text-red-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                Live
+              </span>
+            )}
+            <div className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+              {game.awayTeam.abbreviation} @ {game.homeTeam.abbreviation}
+            </div>
           </div>
+          {lastUpdated && (
+            <p className="text-[10px] text-muted-foreground">
+              {game.status === "in_progress" ? "Auto-updating · " : ""}
+              Updated {lastUpdated.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+            </p>
+          )}
 
           <label className="flex items-center justify-between gap-3">
             <span className="text-sm font-medium text-foreground">Budget</span>
@@ -826,6 +947,169 @@ export default function FantasyOptimizer() {
           )}
         </div>
 
+        {/* ── OCR Lineup Import ─────────────────────────────────────────── */}
+        <div className="mx-4 mt-3 rounded-xl border border-border bg-card overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setOcrExpanded((v) => !v)}
+            className="w-full px-4 py-3 flex items-center justify-between gap-2 hover:bg-muted/20 transition-colors"
+          >
+            <span className="text-xs font-bold tracking-wider uppercase text-foreground flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>
+              </svg>
+              Import from Screenshot (OCR)
+            </span>
+            <span className="text-muted-foreground text-xs select-none">{ocrExpanded ? "▲" : "▼"}</span>
+          </button>
+
+          {ocrExpanded && (
+            <div className="border-t border-border">
+              {/* Hidden file input */}
+              <input
+                ref={ocrFileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  e.target.value = "";
+                  await handleOcrFileChange(file);
+                }}
+              />
+
+              {/* Idle state */}
+              {(ocrPhase === "idle") && !ocrResults && (
+                <div className="px-4 py-4 flex flex-col gap-3">
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Upload a screenshot from your fantasy basketball app. Player names are extracted automatically and matched to this game's roster. Assign Captain and Vice Captain after applying.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => ocrFileRef.current?.click()}
+                    className="h-10 px-4 rounded-md border border-dashed border-primary/50 text-primary text-sm font-semibold hover:bg-primary/5 transition-colors"
+                  >
+                    Choose Screenshot…
+                  </button>
+                </div>
+              )}
+
+              {/* Loading / recognizing */}
+              {(ocrPhase === "loading" || ocrPhase === "recognizing") && (
+                <div className="px-4 py-6 flex flex-col items-center gap-3">
+                  <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                  <p className="text-xs text-muted-foreground text-center">
+                    {ocrPhase === "loading"
+                      ? "Loading OCR engine…"
+                      : `Recognizing text… ${ocrPct}%`}
+                  </p>
+                </div>
+              )}
+
+              {/* Error */}
+              {ocrPhase === "error" && (
+                <div className="px-4 py-4 flex flex-col gap-2">
+                  <p className="text-xs text-destructive">{ocrError ?? "OCR failed. Please try again."}</p>
+                  <button
+                    type="button"
+                    onClick={() => { setOcrPhase("idle"); setOcrError(null); setOcrResults(null); }}
+                    className="text-xs text-primary underline self-start"
+                  >
+                    Try again
+                  </button>
+                </div>
+              )}
+
+              {/* Results */}
+              {ocrPhase === "done" && ocrResults && (() => {
+                const matchedCount = ocrResults.filter((r, i) => r.matchedPlayer !== null || ocrManual[i]).length;
+                const unmatchedCount = ocrResults.filter((r, i) => r.matchedPlayer === null && !ocrManual[i]).length;
+                return (
+                  <div className="flex flex-col">
+                    <div className="px-4 py-2.5 border-b border-border bg-muted/20 flex items-center justify-between">
+                      <p className="text-[11px] text-muted-foreground">
+                        <span className="text-emerald-400 font-semibold">{matchedCount} matched</span>
+                        {unmatchedCount > 0 && <> · <span className="text-amber-400 font-semibold">{unmatchedCount} unmatched</span></>}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => ocrFileRef.current?.click()}
+                        className="text-[11px] text-muted-foreground hover:text-foreground underline"
+                      >
+                        New photo
+                      </button>
+                    </div>
+
+                    <div className="divide-y divide-border max-h-56 overflow-y-auto">
+                      {ocrResults.map((result, i) => {
+                        const manualId = ocrManual[i];
+                        const effectivePlayer = manualId
+                          ? players.find((p) => p.id === manualId) ?? result.matchedPlayer
+                          : result.matchedPlayer;
+                        return (
+                          <div key={i} className="px-4 py-2.5 flex items-center gap-2">
+                            <span className={`shrink-0 text-xs font-bold ${effectivePlayer ? "text-emerald-400" : "text-amber-400"}`}>
+                              {effectivePlayer ? "✓" : "?"}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[11px] text-muted-foreground truncate">"{result.ocrText}"</p>
+                              {effectivePlayer && (
+                                <p className="text-xs font-semibold text-foreground truncate">
+                                  → {effectivePlayer.name}
+                                  {!manualId && result.confidence < 0.9 && (
+                                    <span className="text-muted-foreground font-normal ml-1">
+                                      ({Math.round(result.confidence * 100)}%)
+                                    </span>
+                                  )}
+                                </p>
+                              )}
+                            </div>
+                            <select
+                              value={manualId ?? effectivePlayer?.id ?? ""}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setOcrManual((prev) =>
+                                  val
+                                    ? { ...prev, [i]: val }
+                                    : Object.fromEntries(Object.entries(prev).filter(([k]) => k !== String(i))),
+                                );
+                              }}
+                              className="h-7 text-[11px] rounded border border-input bg-card px-1 max-w-[130px] shrink-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            >
+                              <option value="">— skip —</option>
+                              {players.map((p) => (
+                                <option key={p.id} value={p.id}>{p.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="px-4 py-3 border-t border-border flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleOcrApply}
+                        className="flex-1 h-9 rounded-md bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition-colors"
+                      >
+                        Apply to Lineup ({Math.min(matchedCount, LINEUP_SIZE)} players)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setOcrResults(null); setOcrPhase("idle"); setOcrManual({}); }}
+                        className="h-9 px-3 rounded-md border border-border text-xs text-muted-foreground hover:bg-muted/40 transition-colors"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+        </div>
+
         {/* ── Search + Sort + Filters ───────────────────────────────────── */}
         <div className="p-4 flex flex-col gap-3 bg-background mt-1">
           <input
@@ -836,7 +1120,7 @@ export default function FantasyOptimizer() {
             className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
 
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
             <span className="text-xs font-medium text-muted-foreground shrink-0">Sort by</span>
             <select
               value={sortKey}
@@ -849,6 +1133,14 @@ export default function FantasyOptimizer() {
                 </option>
               ))}
             </select>
+            <button
+              type="button"
+              onClick={() => setSortDir((d) => (d === "desc" ? "asc" : "desc"))}
+              title={sortDir === "desc" ? "Highest first — click for lowest first" : "Lowest first — click for highest first"}
+              className="h-9 w-9 shrink-0 rounded-md border border-input flex items-center justify-center text-lg text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors font-bold"
+            >
+              {sortDir === "desc" ? "↓" : "↑"}
+            </button>
           </div>
 
           {/* Team filter */}
@@ -937,8 +1229,8 @@ export default function FantasyOptimizer() {
               return (
                 <div
                   key={player.id}
-                  onClick={() => togglePlayer(player.id)}
-                  className={`rounded-xl border p-3 flex items-start gap-3 cursor-pointer transition-colors ${
+                  onClick={() => { if (isOverLimit) return; togglePlayer(player.id); }}
+                  className={`rounded-xl border p-3 flex items-start gap-3 transition-colors ${isOverLimit ? "cursor-not-allowed opacity-50" : "cursor-pointer"} ${
                     role === "captain"
                       ? "border-yellow-500/50 bg-yellow-500/10"
                       : role === "vice_captain"

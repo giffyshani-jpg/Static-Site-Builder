@@ -56,6 +56,8 @@ export type TeamFilter = "all" | "home" | "away";
 
 export type OptimizerPrefs = {
   sortKey: string;
+  /** "desc" = highest values first (default); "asc" = lowest first. */
+  sortDir: "asc" | "desc";
   teamFilter: TeamFilter;
   position: string; // "all" or a specific position abbreviation
   favoritesOnly: boolean;
@@ -65,6 +67,7 @@ const OPTIMIZER_PREFS_KEY = "hoopiq:optimizer-prefs";
 
 const DEFAULT_OPTIMIZER_PREFS: OptimizerPrefs = {
   sortKey: "fpts",
+  sortDir: "desc",
   teamFilter: "all",
   position: "all",
   favoritesOnly: false,

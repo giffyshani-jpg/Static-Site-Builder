@@ -1,16 +1,28 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useParams } from "wouter";
 import { MobileLayout } from "../components/layout";
-import { fetchGameById } from "../api";
-import { Game, PlayByPlayEvent } from "../lib/types";
+import { useLiveGame } from "../hooks/use-live-game";
+import { PlayByPlayEvent } from "../lib/types";
 
-const LIVE_POLL_INTERVAL_MS = 15000;
-
-function teamAbbreviationFor(game: Game, teamId: string | null): string {
+function teamAbbreviationFor(
+  awayId: string,
+  awayAbbr: string,
+  homeId: string,
+  homeAbbr: string,
+  teamId: string | null,
+): string {
   if (!teamId) return "";
-  if (game.awayTeam.id === teamId) return game.awayTeam.abbreviation;
-  if (game.homeTeam.id === teamId) return game.homeTeam.abbreviation;
+  if (awayId === teamId) return awayAbbr;
+  if (homeId === teamId) return homeAbbr;
   return "";
+}
+
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
 }
 
 export default function PlayByPlay() {
@@ -18,58 +30,21 @@ export default function PlayByPlay() {
   const gameId = params.id;
   const league = params.league as "nba" | "wnba";
 
-  const [game, setGame] = useState<Game | null | undefined>(null);
-  const [showJump, setShowJump] = useState(false);
+  const { game, lastUpdated, isLive } = useLiveGame(gameId, league);
 
+  const [showJump, setShowJump] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const prevPlayCount = useRef(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    setGame(null);
-    prevPlayCount.current = 0;
-
-    fetchGameById(gameId || "", league).then((data) => {
-      if (cancelled) return;
-      const loadedGame = (data as Game | undefined) ?? undefined;
-      setGame(loadedGame ?? undefined);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [gameId, league]);
-
-  // While the game is live, poll for fresh play-by-play data so new
-  // events show up automatically. Stops as soon as the game is no
-  // longer in progress (e.g. it goes final).
-  useEffect(() => {
-    if (!game || game.status !== "in_progress") return;
-
-    let cancelled = false;
-    const intervalId = setInterval(async () => {
-      const data = await fetchGameById(gameId || "", league);
-      if (cancelled) return;
-      const loadedGame = (data as Game | undefined) ?? undefined;
-      if (loadedGame) setGame(loadedGame);
-    }, LIVE_POLL_INTERVAL_MS);
-
-    return () => {
-      cancelled = true;
-      clearInterval(intervalId);
-    };
-  }, [game?.status, gameId, league]);
 
   const plays: PlayByPlayEvent[] = game?.playByPlay ?? [];
   // Newest first.
   const reversedPlays = [...plays].reverse();
 
+  // Auto-scroll to top (newest) when new plays arrive.
   useEffect(() => {
     if (!game) return;
     const count = reversedPlays.length;
     if (count > prevPlayCount.current && prevPlayCount.current !== 0) {
-      // New plays arrived since the last render — auto-scroll to the
-      // newest event (top of the list, since it's newest-first).
       listRef.current?.scrollTo({ top: 0, behavior: "smooth" });
     }
     prevPlayCount.current = count;
@@ -105,16 +80,34 @@ export default function PlayByPlay() {
     <MobileLayout showBack title="Play-by-Play">
       <div className="flex flex-col h-full">
         {/* Game context strip */}
-        <div className="p-4 border-b border-border bg-card flex items-center justify-between shrink-0">
+        <div className="p-4 border-b border-border bg-card flex items-center justify-between shrink-0 gap-3">
           <div className="text-sm font-semibold text-foreground">
-            {game.awayTeam.abbreviation} {game.awayTeam.score ?? "-"} @ {game.homeTeam.abbreviation}{" "}
-            {game.homeTeam.score ?? "-"}
+            {game.awayTeam.abbreviation} {game.awayTeam.score ?? "-"} @{" "}
+            {game.homeTeam.abbreviation} {game.homeTeam.score ?? "-"}
           </div>
-          <div className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-            {game.status === "scheduled" ? game.startTime : game.period}
-            {game.clock && ` • ${game.clock}`}
+          <div className="flex items-center gap-2 shrink-0">
+            {isLive && (
+              <span className="flex items-center gap-1 text-[10px] font-bold uppercase text-red-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                Live
+              </span>
+            )}
+            <div className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+              {game.status === "scheduled" ? game.startTime : game.period}
+              {game.clock && ` • ${game.clock}`}
+            </div>
           </div>
         </div>
+
+        {/* Last updated bar */}
+        {lastUpdated && (
+          <div className="px-4 py-1.5 bg-muted/30 border-b border-border shrink-0">
+            <p className="text-[10px] text-muted-foreground">
+              {isLive ? "Auto-updating every 5s · " : ""}
+              Last updated {formatTime(lastUpdated)}
+            </p>
+          </div>
+        )}
 
         {/* Play list */}
         <div ref={listRef} onScroll={handleScroll} className="flex-1 overflow-y-auto relative px-4 py-3">
@@ -125,7 +118,13 @@ export default function PlayByPlay() {
           ) : (
             <div className="flex flex-col gap-2 pb-4">
               {reversedPlays.map((play) => {
-                const teamAbbr = teamAbbreviationFor(game, play.teamId);
+                const teamAbbr = teamAbbreviationFor(
+                  game.awayTeam.id,
+                  game.awayTeam.abbreviation,
+                  game.homeTeam.id,
+                  game.homeTeam.abbreviation,
+                  play.teamId,
+                );
                 const isScoring = play.scoringPlay;
                 const isSub = play.isSubstitution;
 
