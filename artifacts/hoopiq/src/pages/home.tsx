@@ -5,13 +5,13 @@ import { MobileLayout } from "../components/layout";
 export default function Home() {
   return (
     <MobileLayout>
-      <div className="p-4 flex flex-col gap-6 pt-8">
+      <div className="p-4 sm:p-6 lg:p-8 flex flex-col gap-6 pt-8 sm:pt-10">
         <div className="space-y-2">
-          <h2 className="text-3xl font-bold tracking-tight">Today's Slate</h2>
-          <p className="text-muted-foreground text-sm">Select a league to view live scores and fantasy stats.</p>
+          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">Today's Slate</h2>
+          <p className="text-muted-foreground text-sm sm:text-base">Select a league to view live scores and fantasy stats.</p>
         </div>
 
-        <div className="flex flex-col gap-4 mt-4">
+        <div className="flex flex-col sm:grid sm:grid-cols-2 gap-4 mt-4">
           <Link href="/nba">
             <div className="relative overflow-hidden group rounded-2xl bg-gradient-to-br from-blue-900 to-slate-900 border border-border p-6 cursor-pointer active:scale-[0.98] transition-all shadow-lg">
               <div className="absolute top-0 right-0 p-4 opacity-20 group-hover:opacity-30 transition-opacity">

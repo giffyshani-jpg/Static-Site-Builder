@@ -3,8 +3,9 @@ import { useParams } from "wouter";
 import { MobileLayout } from "../components/layout";
 import { CompareBar } from "../components/compare-bar";
 import { StarButton } from "../components/star-button";
-import { InjuryBadge } from "../components/injury-badge";
+import { PlayerStatusBadges } from "../components/player-status-badges";
 import { RecentFormBadge } from "../components/recent-form-badge";
+import { PlayerDetailSheet } from "../components/player-detail-sheet";
 import { fetchGameById } from "../api";
 import { calculateFantasyPoints } from "../lib/stats";
 import {
@@ -44,7 +45,7 @@ import {
   matchOcrLinesToPlayers,
 } from "../lib/ocr-import";
 import type { OcrProgress } from "../lib/ocr-import";
-import { inactiveStatusLabel, minutesValue, playerSortTier } from "../lib/player-status";
+import { minutesValue, playerSortTier } from "../lib/player-status";
 import { computeSavedLineupLiveStats } from "../lib/lineup-live";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -143,6 +144,7 @@ export default function FantasyOptimizer() {
   /** Per-result manual overrides: result index → player id */
   const [ocrManual, setOcrManual] = useState<Record<number, string>>({});
   const ocrFileRef = useRef<HTMLInputElement>(null);
+  const [detailPlayer, setDetailPlayer] = useState<OptimizerPlayer | null>(null);
 
   const comparison = useComparisonSelection(gameId);
   const favorites = useFavorites();
@@ -711,7 +713,7 @@ export default function FantasyOptimizer() {
         </div>
 
         {/* ── Lineup summary grid ───────────────────────────────────────── */}
-        <div className="grid grid-cols-2 gap-px bg-border sticky top-0 z-10">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-px bg-border sticky top-0 z-10">
           {/* Lineup size */}
           <div className="bg-card p-3 flex flex-col gap-1">
             <span className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
@@ -1312,7 +1314,6 @@ export default function FantasyOptimizer() {
               const role = getPlayerRole(player.id, lineup);
               const effectiveFpts = player.baseFpts * fptsMultiplier(role);
               const isOverLimit = lineup.playerIds.length >= LINEUP_SIZE && !isInLineup;
-              const statusLabel = inactiveStatusLabel(player, game.status);
               const isUsedElsewhere =
                 avoidUsedPlayers && !isInLineup && usedInSavedLineups.has(player.id);
 
@@ -1350,11 +1351,17 @@ export default function FantasyOptimizer() {
                   {/* Player info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-foreground truncate">{player.name}</span>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setDetailPlayer(player); }}
+                        className="font-semibold text-foreground truncate text-left hover:text-primary hover:underline underline-offset-2 transition-colors"
+                      >
+                        {player.name}
+                      </button>
                       <span className="text-[10px] font-semibold uppercase text-muted-foreground shrink-0">
                         {player.teamAbbreviation}
                       </span>
-                      <InjuryBadge status={statusLabel ?? undefined} />
+                      <PlayerStatusBadges player={player} gameStatus={game.status} />
                       {isUsedElsewhere && (
                         <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground italic shrink-0">
                           used
@@ -1468,6 +1475,16 @@ export default function FantasyOptimizer() {
       </div>
 
       <CompareBar league={league} gameId={gameId || ""} count={comparison.selectedIds.length} />
+
+      {detailPlayer && (
+        <PlayerDetailSheet
+          player={detailPlayer}
+          teamAbbreviation={detailPlayer.teamAbbreviation}
+          gameStatus={game.status}
+          recentForm={recentForm.getForm(detailPlayer.id)}
+          onClose={() => setDetailPlayer(null)}
+        />
+      )}
     </MobileLayout>
   );
 }

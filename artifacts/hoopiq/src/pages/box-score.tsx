@@ -3,8 +3,9 @@ import { useParams, Link } from "wouter";
 import { MobileLayout } from "../components/layout";
 import { CompareBar } from "../components/compare-bar";
 import { StarButton } from "../components/star-button";
-import { InjuryBadge } from "../components/injury-badge";
+import { PlayerStatusBadges } from "../components/player-status-badges";
 import { RecentFormBadge } from "../components/recent-form-badge";
+import { PlayerDetailSheet } from "../components/player-detail-sheet";
 import { calculateFantasyPoints } from "../lib/stats";
 import { useComparisonSelection } from "../hooks/use-comparison-selection";
 import { useFavorites } from "../hooks/use-favorites";
@@ -17,7 +18,7 @@ import {
   setLastGame,
 } from "../lib/preferences";
 import { Player } from "../lib/types";
-import { inactiveStatusLabel, minutesValue, playerSortTier } from "../lib/player-status";
+import { minutesValue, playerSortTier } from "../lib/player-status";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -107,6 +108,7 @@ export default function BoxScore() {
   // Sort state — not persisted (resets on navigation, which is fine).
   const [sortKey, setSortKey] = useState<BoxSortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [detailPlayer, setDetailPlayer] = useState<RosterPlayer | null>(null);
 
   const comparison = useComparisonSelection(gameId);
   const favorites = useFavorites();
@@ -224,7 +226,7 @@ export default function BoxScore() {
     <MobileLayout showBack title={`${game.awayTeam.abbreviation} vs ${game.homeTeam.abbreviation}`}>
 
       {/* Scoreboard Header */}
-      <div className="bg-card border-b border-border p-6 flex flex-col items-center">
+      <div className="bg-card border-b border-border p-6 sm:p-8 flex flex-col items-center">
         {/* Status / period row */}
         <div className="flex items-center gap-2 mb-4">
           {isLive && (
@@ -233,18 +235,18 @@ export default function BoxScore() {
               Live
             </span>
           )}
-          <div className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+          <div className="text-xs sm:text-sm font-semibold tracking-wider text-muted-foreground uppercase">
             {game.status === "scheduled" ? game.startTime : game.period}
             {game.clock && ` - ${game.clock}`}
           </div>
         </div>
 
-        <div className="flex justify-between items-center w-full max-w-[280px]">
+        <div className="flex justify-between items-center w-full max-w-[280px] sm:max-w-sm">
           <div className="flex flex-col items-center gap-2">
-            <div className="w-14 h-14 rounded-full bg-secondary flex items-center justify-center text-lg font-bold text-secondary-foreground border-2 border-border shadow-sm">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-secondary flex items-center justify-center text-lg sm:text-xl font-bold text-secondary-foreground border-2 border-border shadow-sm">
               {game.awayTeam.abbreviation}
             </div>
-            <span className="font-bold text-2xl tabular-nums tracking-tight">
+            <span className="font-bold text-2xl sm:text-3xl tabular-nums tracking-tight">
               {game.awayTeam.score ?? "-"}
             </span>
           </div>
@@ -252,10 +254,10 @@ export default function BoxScore() {
           <div className="text-muted-foreground font-medium text-sm">AT</div>
 
           <div className="flex flex-col items-center gap-2">
-            <div className="w-14 h-14 rounded-full bg-secondary flex items-center justify-center text-lg font-bold text-secondary-foreground border-2 border-border shadow-sm">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-secondary flex items-center justify-center text-lg sm:text-xl font-bold text-secondary-foreground border-2 border-border shadow-sm">
               {game.homeTeam.abbreviation}
             </div>
-            <span className="font-bold text-2xl tabular-nums tracking-tight">
+            <span className="font-bold text-2xl sm:text-3xl tabular-nums tracking-tight">
               {game.homeTeam.score ?? "-"}
             </span>
           </div>
@@ -268,7 +270,7 @@ export default function BoxScore() {
           </p>
         )}
 
-        <div className="mt-5 w-full max-w-[280px] grid grid-cols-1 gap-2">
+        <div className="mt-5 w-full max-w-[280px] sm:max-w-sm grid grid-cols-1 sm:grid-cols-2 gap-2">
           <Link href={`/${game.league}/game/${game.id}/optimizer`}>
             <div className="rounded-xl bg-primary text-primary-foreground border border-primary-border py-2.5 px-4 flex items-center justify-center gap-2 text-sm font-semibold cursor-pointer active:scale-[0.98] transition-transform">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -400,8 +402,14 @@ export default function BoxScore() {
                     <td className="px-4 py-3 sticky left-10 bg-card z-10 shadow-[1px_0_0_0_var(--color-border)]">
                       <div className="flex flex-col gap-0.5">
                         <div className="flex items-center gap-1.5">
-                          <span className="font-semibold text-foreground truncate max-w-[110px]">{player.name}</span>
-                          <InjuryBadge status={inactiveStatusLabel(player, game.status) ?? undefined} />
+                          <button
+                            type="button"
+                            onClick={() => setDetailPlayer(player)}
+                            className="font-semibold text-foreground truncate max-w-[110px] text-left hover:text-primary hover:underline underline-offset-2 transition-colors"
+                          >
+                            {player.name}
+                          </button>
+                          <PlayerStatusBadges player={player} gameStatus={game.status} />
                         </div>
                         <span className="text-xs text-muted-foreground">
                           #{player.number} • {player.position}
@@ -437,6 +445,16 @@ export default function BoxScore() {
       </div>
 
       <CompareBar league={game.league} gameId={game.id} count={comparison.selectedIds.length} />
+
+      {detailPlayer && (
+        <PlayerDetailSheet
+          player={detailPlayer}
+          teamAbbreviation={detailPlayer.teamAbbreviation}
+          gameStatus={game.status}
+          recentForm={recentForm.getForm(detailPlayer.id)}
+          onClose={() => setDetailPlayer(null)}
+        />
+      )}
     </MobileLayout>
   );
 }

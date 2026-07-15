@@ -267,6 +267,10 @@ function buildPlayersByTeamId(boxscorePlayers, injuryStatusByAthleteId) {
           position: athlete.position?.abbreviation ?? "",
           stats: buildStatsFromNames(names, athleteEntry.stats),
           ...(injuryStatus ? { injuryStatus } : {}),
+          // ESPN's box score athletes carry explicit starter/didNotPlay
+          // flags — no need to derive these from minutes.
+          ...(typeof athleteEntry.starter === "boolean" ? { starter: athleteEntry.starter } : {}),
+          ...(typeof athleteEntry.didNotPlay === "boolean" ? { didNotPlay: athleteEntry.didNotPlay } : {}),
         });
       }
     }

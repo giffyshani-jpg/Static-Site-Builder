@@ -33,7 +33,7 @@ export default function LeagueGames() {
 
   return (
     <MobileLayout showBack title={league.toUpperCase() + " Today"}>
-      <div className="p-4 bg-muted/30 min-h-full">
+      <div className="p-4 sm:p-6 bg-muted/30 min-h-full">
         {games === null ? (
           <div className="py-12 text-center text-muted-foreground text-sm">
             Loading games...
@@ -43,7 +43,7 @@ export default function LeagueGames() {
             No games scheduled for today.
           </div>
         ) : (
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col sm:grid sm:grid-cols-2 lg:grid-cols-3 gap-1 sm:gap-3">
             {games.map(game => (
               <GameCard key={game.id} game={game} />
             ))}

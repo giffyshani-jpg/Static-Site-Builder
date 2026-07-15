@@ -1,4 +1,4 @@
-export type BadgeStatus = "OUT" | "GTD" | "Questionable" | "Probable" | "DNP";
+export type BadgeStatus = "OUT" | "GTD" | "Questionable" | "Probable" | "DNP" | "Starter" | "Bench";
 
 const BADGE_STYLES: Record<BadgeStatus, string> = {
   OUT: "bg-rose-500/15 text-rose-400 border-rose-500/30",
@@ -8,6 +8,10 @@ const BADGE_STYLES: Record<BadgeStatus, string> = {
   // Did-not-play / inactive / not-in-lineup — derived client-side, not from
   // the injury report, so it gets its own neutral (non-injury) styling.
   DNP: "bg-slate-500/15 text-slate-400 border-slate-500/30",
+  // Lineup role — a plain fact from the box score, not an availability
+  // concern, so these get their own low-emphasis (non-alert) styling.
+  Starter: "bg-blue-500/15 text-blue-400 border-blue-500/30",
+  Bench: "bg-zinc-500/15 text-zinc-400 border-zinc-500/30",
 };
 
 /** Renders nothing when the player has no status to show. */

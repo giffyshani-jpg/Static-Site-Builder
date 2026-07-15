@@ -28,6 +28,10 @@ export type Player = {
   // injury report alongside the box score) — no extra request. Absent
   // when the player isn't listed on any team's injury report.
   injuryStatus?: "OUT" | "GTD" | "Questionable" | "Probable";
+  // Explicit starter/DNP flags from ESPN's box score athlete entries.
+  // Undefined for scheduled games (no box score published yet).
+  starter?: boolean;
+  didNotPlay?: boolean;
 };
 
 export type Team = {

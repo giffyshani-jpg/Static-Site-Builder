@@ -2,10 +2,13 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useParams } from "wouter";
 import { MobileLayout } from "../components/layout";
 import { StarButton } from "../components/star-button";
+import { PlayerStatusBadges } from "../components/player-status-badges";
+import { PlayerDetailSheet } from "../components/player-detail-sheet";
 import { fetchGameById } from "../api";
 import { calculateFantasyPoints } from "../lib/stats";
 import { useComparisonSelection } from "../hooks/use-comparison-selection";
 import { useFavorites } from "../hooks/use-favorites";
+import { useRecentForm } from "../hooks/use-recent-form";
 import { Game, Player } from "../lib/types";
 
 type ComparePlayer = Player & {
@@ -122,6 +125,8 @@ export default function PlayerComparison() {
   const [game, setGame] = useState<Game | null | undefined>(null);
   const comparison = useComparisonSelection(gameId);
   const favorites = useFavorites();
+  const recentForm = useRecentForm();
+  const [detailPlayer, setDetailPlayer] = useState<ComparePlayer | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -237,12 +242,17 @@ export default function PlayerComparison() {
                         </svg>
                       </button>
                     </div>
-                    <span className="text-xs font-bold text-foreground text-center leading-tight truncate w-full">
+                    <button
+                      type="button"
+                      onClick={() => setDetailPlayer(player)}
+                      className="text-xs font-bold text-foreground text-center leading-tight truncate w-full hover:text-primary hover:underline underline-offset-2 transition-colors"
+                    >
                       {player.name}
-                    </span>
+                    </button>
                     <span className="text-[10px] font-semibold uppercase text-muted-foreground">
                       {player.teamAbbreviation} • #{player.number}
                     </span>
+                    {game && <PlayerStatusBadges player={player} gameStatus={game.status} />}
                   </div>
                 );
               })}
@@ -282,6 +292,16 @@ export default function PlayerComparison() {
           </div>
         )}
       </div>
+
+      {detailPlayer && game && (
+        <PlayerDetailSheet
+          player={detailPlayer}
+          teamAbbreviation={detailPlayer.teamAbbreviation}
+          gameStatus={game.status}
+          recentForm={recentForm.getForm(detailPlayer.id)}
+          onClose={() => setDetailPlayer(null)}
+        />
+      )}
     </MobileLayout>
   );
 }

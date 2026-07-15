@@ -65,3 +65,14 @@ export function getRecentForm(playerId: string): PlayerGameEntry[] {
   const entries = readAll()[playerId] ?? [];
   return entries.slice(-DISPLAY_COUNT);
 }
+
+/**
+ * Returns every locally tracked game for a player (up to
+ * MAX_ENTRIES_PER_PLAYER), oldest first. Used as the basis for a "season
+ * average" — there's no real season-log endpoint wired up (see header
+ * comment), so this is the honest, locally-available proxy: the average
+ * across every game this player has appeared in while using this app.
+ */
+export function getAllTrackedGames(playerId: string): PlayerGameEntry[] {
+  return readAll()[playerId] ?? [];
+}
