@@ -58,6 +58,33 @@ export type PlayByPlayEvent = {
   teamId: string | null;
 };
 
+/**
+ * A single historical game entry from ESPN's player gamelog endpoint
+ * (see providers/espn.js). Distinct from `Player` (a snapshot within one
+ * game's box score) — this is one row of a player's real game history.
+ */
+export type PlayerGameLogEntry = {
+  gameId: string;
+  /** ISO date string, or null if ESPN didn't provide one. */
+  date: string | null;
+  opponentAbbreviation: string;
+  opponentName: string;
+  homeAway: "home" | "away";
+  /** "W" | "L", or null if the game hasn't finished / result is unknown. */
+  result: "W" | "L" | null;
+  teamScore: string | number | null;
+  opponentScore: string | number | null;
+  stats: PlayerStats;
+  /**
+   * Starter/bench status and plus/minus aren't available from the
+   * gamelog endpoint (only a specific game's live summary has them) —
+   * always null here. Kept on the type so callers don't need optional
+   * chaining and so the limitation is visible at the type level.
+   */
+  starter: null;
+  plusMinus: null;
+};
+
 export type Game = {
   id: string;
   league: "nba" | "wnba";

@@ -44,3 +44,15 @@ export async function fetchGameById(gameId, league) {
   const game = await getProvider(league).getGame(gameId);
   return game ?? undefined;
 }
+
+/**
+ * Fetch a player's historical game log (most recent first) by athlete id.
+ *
+ * @param {string} playerId
+ * @param {"nba" | "wnba"} league
+ * @returns {Promise<object[]>}
+ */
+export async function fetchPlayerGameLog(playerId, league) {
+  const games = await getProvider(league).getPlayerGameLog(playerId);
+  return games ?? [];
+}

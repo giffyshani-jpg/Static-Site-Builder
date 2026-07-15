@@ -300,6 +300,7 @@ export default function PlayerComparison() {
           gameStatus={game.status}
           recentForm={recentForm.getForm(detailPlayer.id)}
           onClose={() => setDetailPlayer(null)}
+          league={game.league}
         />
       )}
     </MobileLayout>

@@ -22,3 +22,11 @@ export async function getTodayGames() {
 export async function getGame(gameId) {
   return espn.getGame(LEAGUE, gameId);
 }
+
+/**
+ * @param {string} athleteId
+ * @returns {Promise<object[]>}
+ */
+export async function getPlayerGameLog(athleteId) {
+  return espn.getPlayerGameLog(LEAGUE, athleteId);
+}

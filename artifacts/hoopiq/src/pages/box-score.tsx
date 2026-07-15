@@ -453,6 +453,7 @@ export default function BoxScore() {
           gameStatus={game.status}
           recentForm={recentForm.getForm(detailPlayer.id)}
           onClose={() => setDetailPlayer(null)}
+          league={game.league}
         />
       )}
     </MobileLayout>

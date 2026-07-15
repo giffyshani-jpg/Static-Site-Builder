@@ -1483,6 +1483,7 @@ export default function FantasyOptimizer() {
           gameStatus={game.status}
           recentForm={recentForm.getForm(detailPlayer.id)}
           onClose={() => setDetailPlayer(null)}
+          league={league}
         />
       )}
     </MobileLayout>

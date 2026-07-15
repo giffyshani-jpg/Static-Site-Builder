@@ -8,13 +8,23 @@
 // Endpoints used:
 //   Scoreboard: https://site.api.espn.com/apis/site/v2/sports/basketball/{league}/scoreboard
 //   Summary:    https://site.api.espn.com/apis/site/v2/sports/basketball/{league}/summary?event={id}
+//   Game log:   https://site.web.api.espn.com/apis/common/v3/sports/basketball/{league}/athletes/{athleteId}/gamelog
 //
 // These are ESPN's own internal frontend endpoints, not an officially
 // published/supported API. No API key is required and CORS is open
 // (Access-Control-Allow-Origin: *), so they can be called directly from
 // the browser, but the shape/availability is not guaranteed by ESPN.
+//
+// Game log limitation: the gamelog endpoint returns real per-game
+// history (date, opponent, home/away, W/L, MIN/FG/3PT/FT/REB/AST/STL/
+// BLK/PF/TO/PTS) keyed by athlete id — the same id already used for box
+// score players, so no extra id-resolution step is needed. It does NOT
+// include starter/bench status or plus/minus for historical games (both
+// are only present in a specific game's live summary/box score) — the UI
+// surfaces those as "unavailable" for past games rather than guessing.
 
 const ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports/basketball";
+const ESPN_GAMELOG_BASE = "https://site.web.api.espn.com/apis/common/v3/sports/basketball";
 
 // Maps ESPN's box-score stat abbreviations to our normalized PlayerStats
 // fields. Extra recognized stats are kept on the object too (as bonus
@@ -366,5 +376,118 @@ export async function getGame(league, gameId) {
   } catch (error) {
     console.error(`[espn provider] failed to fetch ${league} game ${gameId}:`, error);
     return undefined;
+  }
+}
+
+// Maps gamelog `names` entries (a fixed 14-column layout, but we look up
+// by name rather than assuming column order in case ESPN changes it) to
+// our normalized field names, mirroring STAT_ALIASES above.
+const GAMELOG_FIELD_MAP = {
+  minutes: "minutes",
+  "fieldGoalsMade-fieldGoalsAttempted": "fieldGoals",
+  "threePointFieldGoalsMade-threePointFieldGoalsAttempted": "threePointers",
+  "freeThrowsMade-freeThrowsAttempted": "freeThrows",
+  totalRebounds: "rebounds",
+  assists: "assists",
+  blocks: "blocks",
+  steals: "steals",
+  fouls: "personalFouls",
+  turnovers: "turnovers",
+  points: "points",
+};
+
+const NUMERIC_GAMELOG_FIELDS = new Set([
+  "rebounds",
+  "assists",
+  "blocks",
+  "steals",
+  "personalFouls",
+  "turnovers",
+  "points",
+]);
+
+/**
+ * Builds a normalized per-game stats object from the gamelog response's
+ * shared `names` column list and one event's parallel `stats` array.
+ */
+function buildGameLogStats(names, values) {
+  const stats = {
+    points: 0,
+    rebounds: 0,
+    assists: 0,
+    steals: 0,
+    blocks: 0,
+    turnovers: 0,
+  };
+  if (!Array.isArray(names) || !Array.isArray(values)) return stats;
+
+  names.forEach((name, idx) => {
+    const field = GAMELOG_FIELD_MAP[name];
+    if (!field) return;
+    const raw = values[idx];
+    stats[field] = NUMERIC_GAMELOG_FIELDS.has(field) ? parseStatValue(raw) : (raw ?? null);
+  });
+
+  return stats;
+}
+
+/**
+ * Excludes preseason from the season types considered "real" history —
+ * preseason stat lines are unrepresentative of regular-season/playoff
+ * performance and would skew averages/trend if included silently.
+ */
+function isEligibleSeasonType(seasonType) {
+  return !/preseason/i.test(seasonType?.displayName ?? "");
+}
+
+/**
+ * Fetches a player's historical game log (most recent games first) via
+ * ESPN's gamelog endpoint. Returns [] if the player has no logged games
+ * yet (e.g. hasn't debuted this season) or the request fails — callers
+ * should treat that as "no history available" rather than an error.
+ *
+ * @param {"nba" | "wnba"} league
+ * @param {string} athleteId
+ * @returns {Promise<object[]>}
+ */
+export async function getPlayerGameLog(league, athleteId) {
+  try {
+    const data = await fetchJson(`${ESPN_GAMELOG_BASE}/${league}/athletes/${encodeURIComponent(athleteId)}/gamelog`);
+    const names = data?.names ?? [];
+    const eventsById = data?.events ?? {};
+    const seasonTypes = Array.isArray(data?.seasonTypes) ? data.seasonTypes : [];
+
+    const rows = [];
+    for (const seasonType of seasonTypes) {
+      if (!isEligibleSeasonType(seasonType)) continue;
+      for (const category of seasonType.categories ?? []) {
+        for (const entry of category.events ?? []) {
+          const event = eventsById[entry.eventId];
+          if (!event) continue;
+          rows.push({
+            gameId: String(entry.eventId),
+            date: event.gameDate ?? null,
+            opponentAbbreviation: event.opponent?.abbreviation ?? "",
+            opponentName: event.opponent?.displayName ?? "",
+            homeAway: event.atVs === "@" ? "away" : "home",
+            result: event.gameResult === "W" || event.gameResult === "L" ? event.gameResult : null,
+            teamScore: event.atVs === "@" ? event.awayTeamScore : event.homeTeamScore,
+            opponentScore: event.atVs === "@" ? event.homeTeamScore : event.awayTeamScore,
+            stats: buildGameLogStats(names, entry.stats),
+            // Not available from the gamelog endpoint — only a specific
+            // game's live summary carries these (see module header).
+            starter: null,
+            plusMinus: null,
+          });
+        }
+      }
+    }
+
+    // Newest first.
+    rows.sort((a, b) => new Date(b.date ?? 0).getTime() - new Date(a.date ?? 0).getTime());
+    return rows;
+  } catch (error) {
+    console.error(`[espn provider] failed to fetch ${league} game log for athlete ${athleteId}:`, error);
+    return [];
   }
 }

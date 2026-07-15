@@ -1,3 +1,4 @@
+import { Link } from "wouter";
 import { calculateFantasyPoints } from "../lib/stats";
 import { getAllTrackedGames, PlayerGameEntry } from "../lib/player-history";
 import { inactiveStatusLabel, minutesValue, starterBadgeLabel } from "../lib/player-status";
@@ -11,6 +12,8 @@ interface PlayerDetailSheetProps {
   gameStatus: Game["status"];
   recentForm: PlayerGameEntry[];
   onClose: () => void;
+  /** Enables the "Full Game Log" link to the network-backed player detail page. */
+  league?: "nba" | "wnba";
 }
 
 /**
@@ -21,13 +24,23 @@ interface PlayerDetailSheetProps {
  * endpoint, so this is clearly labeled as app-tracked rather than a true
  * season stat).
  */
-export function PlayerDetailSheet({ player, teamAbbreviation, gameStatus, recentForm, onClose }: PlayerDetailSheetProps) {
+export function PlayerDetailSheet({ player, teamAbbreviation, gameStatus, recentForm, onClose, league }: PlayerDetailSheetProps) {
   const liveFpts = calculateFantasyPoints(player.stats);
   const statusLabel = inactiveStatusLabel(player, gameStatus);
   const starterLabel = starterBadgeLabel(player);
   const allTracked = getAllTrackedGames(player.id);
   const trackedAvg = allTracked.length > 0 ? averageFpts(allTracked) : null;
   const trend = recentForm.length > 0 ? computeTrend(recentForm) : null;
+
+  const gameLogHref = league
+    ? `/${league}/player/${player.id}?${new URLSearchParams({
+        name: player.name,
+        team: teamAbbreviation,
+        number: player.number,
+        position: player.position,
+        ...(statusLabel ? { injuryStatus: statusLabel } : {}),
+      }).toString()}`
+    : null;
 
   return (
     <div
@@ -147,6 +160,17 @@ export function PlayerDetailSheet({ player, teamAbbreviation, gameStatus, recent
             this app ({allTracked.length} game{allTracked.length === 1 ? "" : "s"} so far), not an official
             league season average.
           </p>
+
+          {gameLogHref && (
+            <Link href={gameLogHref}>
+              <div
+                onClick={onClose}
+                className="rounded-lg bg-primary text-primary-foreground border border-primary-border py-2.5 px-4 flex items-center justify-center gap-2 text-sm font-semibold cursor-pointer active:scale-[0.98] transition-transform"
+              >
+                View Full Game Log
+              </div>
+            </Link>
+          )}
         </div>
       </div>
     </div>
