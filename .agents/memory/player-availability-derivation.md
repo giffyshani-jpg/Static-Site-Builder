@@ -1,12 +1,12 @@
 ---
-name: Deriving player availability without an explicit DNP field
-description: How to classify OUT/DNP/Inactive/Not-in-lineup when the data feed has no such field, and how that classification should feed into UI sort order.
+name: Deriving player availability and starter/bench status from ESPN data
+description: ESPN's box score athlete entries do carry explicit starter/didNotPlay booleans — prefer those over any minutes-based heuristic; heuristic is only a fallback.
 ---
 
-Some sports data feeds (e.g. ESPN's box score/summary endpoints) only expose two real signals about a player's availability: an injury-report status string (OUT/GTD/Questionable/Probable) and per-player box score stats (which include minutes played, absent entirely for players who didn't dress/play). There is no explicit "DNP", "Inactive", or "Not-in-lineup" field.
+Correction to an earlier assumption: ESPN's box score/summary endpoint athlete entries (each `athleteEntry` under a team's `statistics`/roster in the game summary) *do* expose explicit `starter` (boolean) and `didNotPlay` (boolean) fields, in addition to the injury-report status string (OUT/GTD/Questionable/Probable). Confirmed via a live call to the ESPN summary API. Both are `undefined` pregame (no box score published yet), not `false`.
 
-**Rule:** classify a player as inactive if either (a) their injury status is explicitly "OUT", or (b) the game has actually started or finished (not merely scheduled) and their parsed minutes are zero/absent. Pregame, nobody has "not played" yet, so minutes-based inactivity does not apply before tip-off.
+**Rule:** prefer `player.didNotPlay`/`player.starter` when defined. Only fall back to the old minutes-based heuristic (zero minutes once the game has started/finished ⇒ inactive) for feed shapes/entries where these explicit flags are absent.
 
-**Why:** this was needed to satisfy a product requirement ("OUT/DNP/Inactive/Not-in-lineup always pinned last, with a status badge") when the underlying data model had no such field to read directly — confirmed via repo-wide grep that no DNP/Inactive concept existed anywhere before this derivation was added.
+**Why:** the explicit flags are strictly more accurate (they cover DNP-Coach's-Decision, healthy scratches, and bench-never-checked-in cases the minutes heuristic can't distinguish from "on the bench and about to play"), and avoid guessing when the real signal is already in the payload.
 
-**How to apply:** when a UI needs to distinguish "actually available to contribute" from "not going to score more points" for sorting or badging purposes, and the feed only gives injury-status + minutes, use this two-part rule rather than inventing a new data field or relying on injury status alone (which misses healthy scratches / DNP-Coach's Decision / bench players who never checked in).
+**How to apply:** when adding new ESPN-sourced fields or availability/lineup-role logic, check the raw athlete entry for existing explicit flags before deriving one — don't assume a heuristic is necessary just because an older pass through this feed didn't find the flag.
