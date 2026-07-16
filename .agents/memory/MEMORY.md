@@ -1,1 +1,2 @@
 - [HoopIQ / ESPN player game log](hoopiq-espn-gamelog.md) — ESPN has a real, undocumented per-player historical gamelog endpoint; use it instead of assuming ESPN can't do history.
+- [HoopIQ Pre-Game Intelligence architecture](hoopiq-pregame-intel.md) — ESPN pregame box score is always empty; expected starters derived from previous completed game; injuryReport available pregame; see file for full data flow.
