@@ -56,3 +56,17 @@ export async function fetchPlayerGameLog(playerId, league) {
   const games = await getProvider(league).getPlayerGameLog(playerId);
   return games ?? [];
 }
+
+/**
+ * Fetch a team's schedule (id/date/state for every game this season).
+ * Used by Pre-Game Intelligence to find a team's most recent completed
+ * game and detect back-to-backs.
+ *
+ * @param {string} teamId
+ * @param {"nba" | "wnba"} league
+ * @returns {Promise<object[]>}
+ */
+export async function fetchTeamSchedule(teamId, league) {
+  const schedule = await getProvider(league).getTeamSchedule(teamId);
+  return schedule ?? [];
+}

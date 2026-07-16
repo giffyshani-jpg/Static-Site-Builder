@@ -11,6 +11,10 @@ import { fetchGameById } from "../api";
 import { Game } from "../lib/types";
 
 export const LIVE_POLL_INTERVAL_MS = 5_000;
+// Pre-Game Intelligence requirement: lineups/injuries/starting status
+// refresh automatically every 60 seconds until tipoff, then stop (the
+// in-progress polling above takes over once the game actually starts).
+export const PREGAME_POLL_INTERVAL_MS = 60_000;
 
 export type LiveGameState = {
   game: Game | null | undefined;
@@ -57,6 +61,31 @@ export function useLiveGame(
         setLastUpdated(new Date());
       }
     }, LIVE_POLL_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [game?.status, gameId, league]);
+
+  // Pregame polling – refreshes confirmed lineups / injury reports /
+  // starting status every 60s while the game hasn't started yet. Stops
+  // the moment the game flips to in_progress (the 5s live polling above
+  // takes over) or final, matching the "stop refreshing after game
+  // starts" requirement.
+  useEffect(() => {
+    if (!game || game.status !== "scheduled" || !gameId) return;
+
+    let cancelled = false;
+    const id = setInterval(async () => {
+      const data = await fetchGameById(gameId, league);
+      if (cancelled) return;
+      const loaded = (data as Game | undefined) ?? undefined;
+      if (loaded) {
+        setGame(loaded);
+        setLastUpdated(new Date());
+      }
+    }, PREGAME_POLL_INTERVAL_MS);
 
     return () => {
       cancelled = true;

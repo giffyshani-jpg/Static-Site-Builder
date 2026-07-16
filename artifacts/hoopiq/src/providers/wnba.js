@@ -30,3 +30,11 @@ export async function getGame(gameId) {
 export async function getPlayerGameLog(athleteId) {
   return espn.getPlayerGameLog(LEAGUE, athleteId);
 }
+
+/**
+ * @param {string} teamId
+ * @returns {Promise<object[]>}
+ */
+export async function getTeamSchedule(teamId) {
+  return espn.getTeamSchedule(LEAGUE, teamId);
+}

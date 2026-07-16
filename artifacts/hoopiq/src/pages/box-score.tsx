@@ -6,6 +6,7 @@ import { StarButton } from "../components/star-button";
 import { PlayerStatusBadges } from "../components/player-status-badges";
 import { RecentFormBadge } from "../components/recent-form-badge";
 import { PlayerDetailSheet } from "../components/player-detail-sheet";
+import { PregameIntelPanel } from "../components/pregame-intel-panel";
 import { calculateFantasyPoints } from "../lib/stats";
 import { useComparisonSelection } from "../hooks/use-comparison-selection";
 import { useFavorites } from "../hooks/use-favorites";
@@ -290,6 +291,13 @@ export default function BoxScore() {
         </div>
       </div>
 
+      {/* Pre-Game Intelligence — replaces the (otherwise empty) roster
+          table while the game hasn't started, so users see who's likely
+          starting/injured without leaving this page. */}
+      {game.status === "scheduled" ? (
+        <PregameIntelPanel game={game} league={league} lastUpdated={lastUpdated} />
+      ) : (
+        <>
       {/* Team Tabs */}
       <div className="flex border-b border-border bg-background sticky top-0 z-10">
         {(["away", "home", "all"] as BoxScoreTab[]).map((tab) => (
@@ -443,6 +451,8 @@ export default function BoxScore() {
           </tbody>
         </table>
       </div>
+        </>
+      )}
 
       <CompareBar league={game.league} gameId={game.id} count={comparison.selectedIds.length} />
 

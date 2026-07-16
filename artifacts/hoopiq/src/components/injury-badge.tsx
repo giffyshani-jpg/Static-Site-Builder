@@ -1,4 +1,18 @@
-export type BadgeStatus = "OUT" | "GTD" | "Questionable" | "Probable" | "DNP" | "Starter" | "Bench";
+export type BadgeStatus =
+  | "OUT"
+  | "GTD"
+  | "Questionable"
+  | "Probable"
+  | "DNP"
+  | "Starter"
+  | "Bench"
+  // Pre-Game Intelligence lineup statuses (see lib/pregame-intel.ts) —
+  // distinguish a real, published starter flag from our best-guess
+  // heuristic before ESPN publishes one.
+  | "Confirmed Starter"
+  | "Confirmed Bench"
+  | "Expected Starter"
+  | "Game Time Decision";
 
 const BADGE_STYLES: Record<BadgeStatus, string> = {
   OUT: "bg-rose-500/15 text-rose-400 border-rose-500/30",
@@ -12,6 +26,10 @@ const BADGE_STYLES: Record<BadgeStatus, string> = {
   // concern, so these get their own low-emphasis (non-alert) styling.
   Starter: "bg-blue-500/15 text-blue-400 border-blue-500/30",
   Bench: "bg-zinc-500/15 text-zinc-400 border-zinc-500/30",
+  "Confirmed Starter": "bg-blue-500/20 text-blue-300 border-blue-500/40",
+  "Confirmed Bench": "bg-zinc-500/15 text-zinc-400 border-zinc-500/30",
+  "Expected Starter": "bg-sky-500/10 text-sky-400 border-sky-500/30 border-dashed",
+  "Game Time Decision": "bg-amber-500/15 text-amber-400 border-amber-500/30",
 };
 
 /** Renders nothing when the player has no status to show. */

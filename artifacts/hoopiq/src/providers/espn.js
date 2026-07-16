@@ -182,6 +182,10 @@ function normalizeScoreboardEvent(league, event) {
     homeTeam: parseTeamBasics(homeCompetitor, gameStatus),
     awayTeam: parseTeamBasics(awayCompetitor, gameStatus),
     startTime: formatStartTime(event.date),
+    // Raw ISO tipoff time, kept alongside the display-formatted
+    // `startTime` above — Pre-Game Intelligence needs an actual
+    // timestamp (e.g. for back-to-back detection), not just "7:30 PM".
+    startTimeIso: event.date ?? null,
     status: gameStatus,
     period: formatPeriodLabel(league, status),
     clock: gameStatus === "in_progress" ? status?.displayClock : undefined,
@@ -233,23 +237,57 @@ function normalizeInjuryStatus(injury) {
 }
 
 /**
- * Builds { [athleteId]: injuryStatus } from a summary response's
- * top-level `injuries` array — ESPN includes each team's injury report
- * alongside the box score in the same summary payload, so this needs no
- * extra request.
+ * Builds { [athleteId]: injuryStatus } AND a flat, UI-friendly injury
+ * report list from a summary response's top-level `injuries` array —
+ * ESPN includes each team's injury report alongside the box score in the
+ * same summary payload (available even pregame, before any box score is
+ * published), so this needs no extra request.
  */
-function buildInjuryStatusByAthleteId(injuriesBlocks) {
+function buildInjuryReport(injuriesBlocks) {
   const byAthleteId = {};
-  if (!Array.isArray(injuriesBlocks)) return byAthleteId;
+  const list = [];
+  if (!Array.isArray(injuriesBlocks)) return { byAthleteId, list };
   for (const teamBlock of injuriesBlocks) {
+    const teamId = String(teamBlock.team?.id ?? "");
     for (const injury of teamBlock.injuries ?? []) {
-      const athleteId = String(injury.athlete?.id ?? "");
+      const athlete = injury.athlete ?? {};
+      const athleteId = String(athlete.id ?? "");
       if (!athleteId) continue;
       const status = normalizeInjuryStatus(injury);
-      if (status) byAthleteId[athleteId] = status;
+      if (!status) continue;
+      byAthleteId[athleteId] = status;
+      list.push({
+        teamId,
+        playerId: athleteId,
+        name: athlete.displayName ?? athlete.shortName ?? "Unknown",
+        position: athlete.position?.abbreviation ?? "",
+        status,
+      });
     }
   }
-  return byAthleteId;
+  return { byAthleteId, list };
+}
+
+/**
+ * Parses ESPN's `pickcenter` betting-market block (first/primary
+ * provider only) into a direction-agnostic spread magnitude plus which
+ * team is favored. Returns null when no market is posted for this game
+ * (e.g. far out from tipoff, or an unsupported league/book combo) — the
+ * UI treats "no odds" as "blowout risk unknown", never a guess.
+ */
+function buildPregameOdds(pickcenter, homeTeamId, awayTeamId) {
+  const entry = Array.isArray(pickcenter) ? pickcenter[0] : undefined;
+  if (!entry || typeof entry.spread !== "number") return undefined;
+  const favoriteTeamId = entry.homeTeamOdds?.favorite
+    ? homeTeamId
+    : entry.awayTeamOdds?.favorite
+      ? awayTeamId
+      : null;
+  return {
+    spread: Math.abs(entry.spread),
+    favoriteTeamId,
+    overUnder: typeof entry.overUnder === "number" ? entry.overUnder : null,
+  };
 }
 
 /**
@@ -317,7 +355,7 @@ function normalizeSummary(league, gameId, summary) {
   const awayCompetitor = competitors.find((c) => c.homeAway === "away");
   const homeCompetitor = competitors.find((c) => c.homeAway === "home");
 
-  const injuryStatusByAthleteId = buildInjuryStatusByAthleteId(summary.injuries);
+  const { byAthleteId: injuryStatusByAthleteId, list: injuryReport } = buildInjuryReport(summary.injuries);
   const playersByTeamId = buildPlayersByTeamId(summary.boxscore?.players, injuryStatusByAthleteId);
   const totalsByTeamId = buildTeamTotalsByTeamId(summary.boxscore?.teams);
 
@@ -336,10 +374,13 @@ function normalizeSummary(league, gameId, summary) {
     homeTeam,
     awayTeam,
     startTime: formatStartTime(headerCompetition?.date ?? summary.header?.date),
+    startTimeIso: headerCompetition?.date ?? summary.header?.date ?? null,
     status: gameStatus,
     period: formatPeriodLabel(league, status),
     clock: gameStatus === "in_progress" ? status?.displayClock : undefined,
     playByPlay: normalizePlayByPlay(summary.plays),
+    injuryReport,
+    pregameOdds: buildPregameOdds(summary.pickcenter, homeTeam.id, awayTeam.id),
   };
 }
 
@@ -376,6 +417,32 @@ export async function getGame(league, gameId) {
   } catch (error) {
     console.error(`[espn provider] failed to fetch ${league} game ${gameId}:`, error);
     return undefined;
+  }
+}
+
+/**
+ * Fetches a team's full-season schedule and normalizes it to just what
+ * Pre-Game Intelligence needs: each event's id, date, and state
+ * (pre/in/post). Used to find a team's most recent completed game (as a
+ * baseline for "who started/played last time") and to detect
+ * back-to-backs (games on consecutive nights).
+ *
+ * @param {"nba" | "wnba"} league
+ * @param {string} teamId
+ * @returns {Promise<object[]>}
+ */
+export async function getTeamSchedule(league, teamId) {
+  try {
+    const data = await fetchJson(`${ESPN_BASE}/${league}/teams/${encodeURIComponent(teamId)}/schedule`);
+    const events = Array.isArray(data?.events) ? data.events : [];
+    return events.map((event) => ({
+      id: String(event.id),
+      date: event.date ?? "",
+      state: event.competitions?.[0]?.status?.type?.state ?? "pre",
+    }));
+  } catch (error) {
+    console.error(`[espn provider] failed to fetch ${league} schedule for team ${teamId}:`, error);
+    return [];
   }
 }
 

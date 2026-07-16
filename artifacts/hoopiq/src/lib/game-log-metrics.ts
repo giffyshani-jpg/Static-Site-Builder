@@ -19,6 +19,8 @@ export type GameLogMetrics = {
   lowFpts: number | null;
   /** Minutes for each game, newest-first. */
   minutesByGame: number[];
+  avgMinutesLast5: number | null;
+  avgMinutesLast10: number | null;
   /** "up" / "down" / "flat" comparing the most recent game's minutes to the prior average. */
   minutesTrend: "up" | "down" | "flat" | null;
   trend: FormTrend;
@@ -90,6 +92,8 @@ export function computeGameLogMetrics(entries: PlayerGameLogEntry[]): GameLogMet
     highFpts: fptsByGame.length > 0 ? Math.max(...fptsByGame) : null,
     lowFpts: fptsByGame.length > 0 ? Math.min(...fptsByGame) : null,
     minutesByGame,
+    avgMinutesLast5: average(minutesByGame.slice(0, 5)),
+    avgMinutesLast10: average(minutesByGame.slice(0, 10)),
     minutesTrend: computeMinutesTrend(minutesByGame),
     trend: computeTrend(fptsByGame),
     consistency: computeConsistency(last10),

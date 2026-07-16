@@ -45,6 +45,42 @@ export type Team = {
 
 export type GameStatus = "scheduled" | "in_progress" | "final";
 
+/**
+ * One entry from a game summary's `injuries` block — ESPN's per-team
+ * injury report, available even for scheduled (pregame) games. Distinct
+ * from `Player.injuryStatus` (which is only populated once a player also
+ * appears in a published box score) — this is available before any box
+ * score exists, which is what Pre-Game Intelligence needs.
+ */
+export type InjuryReportEntry = {
+  teamId: string;
+  playerId: string;
+  name: string;
+  position: string;
+  status: "OUT" | "GTD" | "Questionable" | "Probable";
+};
+
+/**
+ * Pregame betting-market data from ESPN's `pickcenter` block (when a
+ * market exists for the game). Used only as a "blowout risk" signal — a
+ * large spread suggests a lopsided expected score, which can mean
+ * reduced fourth-quarter minutes for likely-winning-team starters. Never
+ * treated as fact, just a heuristic input alongside others.
+ */
+export type PregameOdds = {
+  /** Absolute point spread (always >= 0) — magnitude only, not direction. */
+  spread: number | null;
+  favoriteTeamId: string | null;
+  overUnder: number | null;
+};
+
+/** One entry from a team's schedule — used to detect back-to-backs. */
+export type TeamScheduleEntry = {
+  id: string;
+  date: string;
+  state: "pre" | "in" | "post";
+};
+
 export type PlayByPlayEvent = {
   id: string;
   description: string;
@@ -91,8 +127,14 @@ export type Game = {
   homeTeam: Team;
   awayTeam: Team;
   startTime: string;
+  /** Raw ISO tipoff timestamp, when ESPN provided one (used for back-to-back detection). */
+  startTimeIso?: string | null;
   status: GameStatus;
   period?: string;
   clock?: string;
   playByPlay?: PlayByPlayEvent[];
+  /** Full per-team injury report, available pregame — see InjuryReportEntry. */
+  injuryReport?: InjuryReportEntry[];
+  /** Betting-market snapshot for blowout-risk estimation, when available. */
+  pregameOdds?: PregameOdds;
 };
