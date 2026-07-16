@@ -55,7 +55,7 @@ type PlayerMetrics = {
 
 /** Builds the "who played / started last time" baseline for one team. */
 async function buildTeamBaseline(
-  league: "nba" | "wnba",
+  league: import("../lib/types").LeagueKey,
   teamId: string,
   gameDateIso: string,
 ): Promise<TeamBaseline> {
@@ -80,7 +80,7 @@ async function buildTeamBaseline(
   return { teamId, backToBack, rotation };
 }
 
-async function fetchPlayerMetrics(playerId: string, league: "nba" | "wnba"): Promise<PlayerMetrics> {
+async function fetchPlayerMetrics(playerId: string, league: import("../lib/types").LeagueKey): Promise<PlayerMetrics> {
   const games = (await fetchPlayerGameLog(playerId, league)) as PlayerGameLogEntry[];
   const metrics = computeGameLogMetrics(games);
   return {
@@ -109,7 +109,7 @@ export type PregameIntelState = {
  * back to its normal live/final rendering at that point, which already
  * has real confirmed data.
  */
-export function usePregameIntel(game: Game | null | undefined, league: "nba" | "wnba"): PregameIntelState {
+export function usePregameIntel(game: Game | null | undefined, league: import("../lib/types").LeagueKey): PregameIntelState {
   const [baselines, setBaselines] = useState<Record<string, TeamBaseline> | null>(null);
   const [metricsByPlayerId, setMetricsByPlayerId] = useState<Record<string, PlayerMetrics>>({});
   const loadedForGameId = useRef<string | null>(null);

@@ -26,12 +26,12 @@ function hasStorage(): boolean {
   return typeof window !== "undefined" && !!window.sessionStorage;
 }
 
-function cacheKey(league: "nba" | "wnba", playerId: string): string {
+function cacheKey(league: import("./types").LeagueKey, playerId: string): string {
   return `${STORAGE_PREFIX}${league}:${playerId}`;
 }
 
 /** Returns cached games if present and fresh, otherwise null. */
-export function getCachedGameLog(league: "nba" | "wnba", playerId: string): PlayerGameLogEntry[] | null {
+export function getCachedGameLog(league: import("./types").LeagueKey, playerId: string): PlayerGameLogEntry[] | null {
   if (!hasStorage()) return null;
   try {
     const raw = window.sessionStorage.getItem(cacheKey(league, playerId));
@@ -46,7 +46,7 @@ export function getCachedGameLog(league: "nba" | "wnba", playerId: string): Play
 }
 
 /** Stores a freshly network-fetched game log. Never call with locally-derived data. */
-export function setCachedGameLog(league: "nba" | "wnba", playerId: string, games: PlayerGameLogEntry[]): void {
+export function setCachedGameLog(league: import("./types").LeagueKey, playerId: string, games: PlayerGameLogEntry[]): void {
   if (!hasStorage()) return;
   const entry: CacheEntry = { fetchedAt: Date.now(), games };
   try {

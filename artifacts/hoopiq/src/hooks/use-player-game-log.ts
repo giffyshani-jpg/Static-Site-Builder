@@ -16,7 +16,7 @@ export type PlayerGameLogState = {
  * client-side cache — see lib/game-log-cache.ts), never from locally
  * viewed box scores. Re-fetches whenever playerId/league changes.
  */
-export function usePlayerGameLog(playerId: string | undefined, league: "nba" | "wnba"): PlayerGameLogState {
+export function usePlayerGameLog(playerId: string | undefined, league: import("../lib/types").LeagueKey): PlayerGameLogState {
   const [state, setState] = useState<PlayerGameLogState>({ games: null, fromCache: false, error: false });
 
   useEffect(() => {

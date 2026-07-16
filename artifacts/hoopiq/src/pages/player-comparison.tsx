@@ -120,7 +120,7 @@ const LABEL_COL_WIDTH = 116;
 export default function PlayerComparison() {
   const params = useParams();
   const gameId = params.id;
-  const league = params.league as "nba" | "wnba";
+  const league = params.league as import("../lib/types").LeagueKey;
 
   const [game, setGame] = useState<Game | null | undefined>(null);
   const comparison = useComparisonSelection(gameId);

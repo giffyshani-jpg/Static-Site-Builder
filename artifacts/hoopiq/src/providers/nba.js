@@ -16,6 +16,14 @@ export async function getTodayGames() {
 }
 
 /**
+ * @param {string} dateStr  YYYYMMDD
+ * @returns {Promise<object[]>}
+ */
+export async function getGamesByDate(dateStr) {
+  return espn.getGamesByDate(LEAGUE, dateStr);
+}
+
+/**
  * @param {string} gameId
  * @returns {Promise<object | undefined>}
  */

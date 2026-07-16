@@ -26,7 +26,7 @@ function writeJson(key: string, value: unknown): void {
 
 // --- Last selected game (global, used for a "continue" shortcut) ---
 
-export type LastGameRef = { league: "nba" | "wnba"; gameId: string };
+export type LastGameRef = { league: import("./types").LeagueKey; gameId: string };
 
 const LAST_GAME_KEY = "hoopiq:last-game";
 

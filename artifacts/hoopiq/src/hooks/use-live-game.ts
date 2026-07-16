@@ -24,7 +24,7 @@ export type LiveGameState = {
 
 export function useLiveGame(
   gameId: string | undefined,
-  league: "nba" | "wnba",
+  league: import("../lib/types").LeagueKey,
 ): LiveGameState {
   const [game, setGame] = useState<Game | null | undefined>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);

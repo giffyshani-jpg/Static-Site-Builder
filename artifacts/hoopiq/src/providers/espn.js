@@ -385,20 +385,30 @@ function normalizeSummary(league, gameId, summary) {
 }
 
 /**
- * Fetches today's games for a given ESPN league slug ("nba" | "wnba").
+ * Fetches games for a given ESPN league slug and optional date string
+ * (YYYYMMDD). Omitting `dateStr` fetches today's slate (ESPN's default).
  *
- * @param {"nba" | "wnba"} league
+ * @param {string} league  ESPN basketball league slug
+ * @param {string} [dateStr]  Optional YYYYMMDD date (e.g. "20261017")
  * @returns {Promise<object[]>}
  */
-export async function getTodayGames(league) {
+export async function getGamesByDate(league, dateStr) {
   try {
-    const data = await fetchJson(`${ESPN_BASE}/${league}/scoreboard`);
+    const url = dateStr
+      ? `${ESPN_BASE}/${league}/scoreboard?dates=${encodeURIComponent(dateStr)}`
+      : `${ESPN_BASE}/${league}/scoreboard`;
+    const data = await fetchJson(url);
     const events = data.events ?? [];
     return events.map((event) => normalizeScoreboardEvent(league, event));
   } catch (error) {
-    console.error(`[espn provider] failed to fetch ${league} scoreboard:`, error);
+    console.error(`[espn provider] failed to fetch ${league} scoreboard${dateStr ? ` for ${dateStr}` : ""}:`, error);
     return [];
   }
+}
+
+/** Convenience alias — fetches today's slate for a league. */
+export async function getTodayGames(league) {
+  return getGamesByDate(league);
 }
 
 /**

@@ -32,6 +32,14 @@ export async function getPlayerGameLog(athleteId) {
 }
 
 /**
+ * @param {string} dateStr  YYYYMMDD
+ * @returns {Promise<object[]>}
+ */
+export async function getGamesByDate(dateStr) {
+  return espn.getGamesByDate(LEAGUE, dateStr);
+}
+
+/**
  * @param {string} teamId
  * @returns {Promise<object[]>}
  */

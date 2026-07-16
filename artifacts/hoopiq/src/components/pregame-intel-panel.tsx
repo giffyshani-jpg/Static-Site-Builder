@@ -145,7 +145,7 @@ export function PregameIntelPanel({
   lastUpdated,
 }: {
   game: Game;
-  league: "nba" | "wnba";
+  league: import("../lib/types").LeagueKey;
   lastUpdated: Date | null;
 }) {
   const intel = usePregameIntel(game, league);

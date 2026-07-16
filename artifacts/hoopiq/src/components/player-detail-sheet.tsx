@@ -13,7 +13,7 @@ interface PlayerDetailSheetProps {
   recentForm: PlayerGameEntry[];
   onClose: () => void;
   /** Enables the "Full Game Log" link to the network-backed player detail page. */
-  league?: "nba" | "wnba";
+  league?: import("../lib/types").LeagueKey;
 }
 
 /**

@@ -100,7 +100,7 @@ function validationMessage(err: ValidationError): string {
 export default function FantasyOptimizer() {
   const params = useParams();
   const gameId = params.id;
-  const league = params.league as "nba" | "wnba";
+  const league = params.league as import("../lib/types").LeagueKey;
 
   const [game, setGame] = useState<Game | null | undefined>(null);
   const [budget, setBudget] = useState<number>(DEFAULT_FANTASY_BUDGET);

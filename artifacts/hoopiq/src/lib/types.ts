@@ -121,9 +121,12 @@ export type PlayerGameLogEntry = {
   plusMinus: null;
 };
 
+/** All leagues supported by the app's provider registry. */
+export type LeagueKey = "nba" | "wnba" | "nbl" | "fiba" | "ncaam";
+
 export type Game = {
   id: string;
-  league: "nba" | "wnba";
+  league: LeagueKey;
   homeTeam: Team;
   awayTeam: Team;
   startTime: string;

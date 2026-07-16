@@ -32,7 +32,7 @@ function formatGameDate(iso: string | null): string {
 
 export default function PlayerDetail() {
   const params = useParams();
-  const league = params.league as "nba" | "wnba";
+  const league = params.league as import("../lib/types").LeagueKey;
   const playerId = params.playerId as string;
 
   // Display-only context passed from the page that linked here (box

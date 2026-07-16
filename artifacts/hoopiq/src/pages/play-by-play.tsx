@@ -28,7 +28,7 @@ function formatTime(date: Date): string {
 export default function PlayByPlay() {
   const params = useParams();
   const gameId = params.id;
-  const league = params.league as "nba" | "wnba";
+  const league = params.league as import("../lib/types").LeagueKey;
 
   const { game, lastUpdated, isLive } = useLiveGame(gameId, league);
 
