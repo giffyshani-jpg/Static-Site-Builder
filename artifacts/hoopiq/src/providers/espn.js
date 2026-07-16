@@ -572,7 +572,7 @@ export async function getPlayerGameLog(league, athleteId) {
 // ─── Timezone-safe league overview ─────────────────────────────────────────
 
 /** Formats a Date as YYYYMMDD using UTC — never the local clock. */
-function formatUtcDate(date) {
+export function formatUtcDate(date) {
   const y = date.getUTCFullYear();
   const m = String(date.getUTCMonth() + 1).padStart(2, "0");
   const d = String(date.getUTCDate()).padStart(2, "0");
@@ -609,6 +609,97 @@ function formatUtcDate(date) {
  *         found in the initial 3-day window. Set to false on the home page
  *         for a fast first paint (just live + close-in-time games).
  */
+/**
+ * Like getGamesByDate but applies a raw-event filter before normalization.
+ * Used by nba-summer to hit the NBA scoreboard and keep only type-3 games.
+ *
+ * @param {string} league
+ * @param {string | null} dateStr
+ * @param {(rawEvent: object) => boolean} eventFilter
+ */
+export async function getGamesByDateFiltered(league, dateStr, eventFilter) {
+  try {
+    const url = dateStr
+      ? `${ESPN_BASE}/${league}/scoreboard?dates=${encodeURIComponent(dateStr)}`
+      : `${ESPN_BASE}/${league}/scoreboard`;
+    const data = await fetchJson(url);
+    const events = (data.events ?? []).filter(eventFilter);
+    return events.map((event) => normalizeScoreboardEvent(league, event));
+  } catch (error) {
+    console.error(`[espn provider] filtered fetch failed for ${league}:`, error);
+    return [];
+  }
+}
+
+/**
+ * getLeagueOverview variant that filters raw events before normalization and
+ * maps the league key on returned games. Used by nba-summer: hits the NBA
+ * scoreboard (slug="nba"), keeps only season-type-3 events, renames league.
+ *
+ * @param {string} league              ESPN slug to hit (e.g. "nba")
+ * @param {string} overrideLeagueKey   league key for returned games (e.g. "nba-summer")
+ * @param {(rawEvent: object) => boolean} eventFilter
+ * @param {{ scan?: boolean, scanDays?: number }} [options]
+ */
+export async function getLeagueOverviewFiltered(
+  league,
+  overrideLeagueKey,
+  eventFilter,
+  { scan = true, scanDays = 21 } = {}
+) {
+  const now = new Date();
+  const utcYesterday = formatUtcDate(new Date(now.getTime() - 86_400_000));
+  const utcTomorrow  = formatUtcDate(new Date(now.getTime() + 86_400_000));
+
+  const remap = (games) =>
+    games.map((g) => ({ ...g, league: overrideLeagueKey }));
+
+  const [defaultGames, yesterdayGames, tomorrowGames] = await Promise.all([
+    getGamesByDateFiltered(league, null, eventFilter),
+    getGamesByDateFiltered(league, utcYesterday, eventFilter),
+    getGamesByDateFiltered(league, utcTomorrow, eventFilter),
+  ]);
+
+  const byId = new Map();
+  for (const g of remap([...yesterdayGames, ...tomorrowGames])) byId.set(g.id, g);
+  for (const g of remap(defaultGames)) byId.set(g.id, g);
+  const all = [...byId.values()];
+
+  const live = all.filter((g) => g.status === "in_progress");
+  const upcoming = all
+    .filter((g) => g.status === "scheduled")
+    .sort((a, b) => new Date(a.startTimeIso ?? 0).getTime() - new Date(b.startTimeIso ?? 0).getTime());
+  const completed = all
+    .filter((g) => g.status === "final")
+    .sort((a, b) => new Date(b.startTimeIso ?? 0).getTime() - new Date(a.startTimeIso ?? 0).getTime());
+
+  if (scan && upcoming.length === 0) {
+    for (let day = 2; day <= scanDays; day++) {
+      const futureDate = formatUtcDate(new Date(now.getTime() + day * 86_400_000));
+      const futureGames = remap(await getGamesByDateFiltered(league, futureDate, eventFilter));
+      const sched = futureGames.filter((g) => g.status === "scheduled");
+      if (sched.length > 0) {
+        upcoming.push(...sched.sort((a, b) => new Date(a.startTimeIso ?? 0).getTime() - new Date(b.startTimeIso ?? 0).getTime()));
+        break;
+      }
+    }
+  }
+
+  if (scan && completed.length === 0) {
+    for (let day = 2; day <= scanDays; day++) {
+      const pastDate = formatUtcDate(new Date(now.getTime() - day * 86_400_000));
+      const pastGames = remap(await getGamesByDateFiltered(league, pastDate, eventFilter));
+      const done = pastGames.filter((g) => g.status === "final");
+      if (done.length > 0) {
+        completed.push(...done.sort((a, b) => new Date(b.startTimeIso ?? 0).getTime() - new Date(a.startTimeIso ?? 0).getTime()));
+        break;
+      }
+    }
+  }
+
+  return { live, upcoming, lastPlayed: completed[0] ?? null };
+}
+
 export async function getLeagueOverview(league, { scan = true } = {}) {
   const now = new Date();
   const utcYesterday = formatUtcDate(new Date(now.getTime() - 86_400_000));
@@ -643,9 +734,10 @@ export async function getLeagueOverview(league, { scan = true } = {}) {
       new Date(a.startTimeIso ?? 0).getTime()
     );
 
-  // Forward scan — find next game even if weeks away.
+  // Forward scan — find next game even if months away.
+  // 180-day window covers long off-seasons (e.g. NBL July→October).
   if (scan && upcoming.length === 0) {
-    for (let day = 2; day <= 45; day++) {
+    for (let day = 2; day <= 180; day++) {
       const futureDate = formatUtcDate(new Date(now.getTime() + day * 86_400_000));
       const futureGames = await getGamesByDate(league, futureDate);
       const futureSched = futureGames.filter((g) => g.status === "scheduled");
@@ -664,7 +756,7 @@ export async function getLeagueOverview(league, { scan = true } = {}) {
 
   // Backward scan — find most recently completed game.
   if (scan && completed.length === 0) {
-    for (let day = 2; day <= 45; day++) {
+    for (let day = 2; day <= 180; day++) {
       const pastDate = formatUtcDate(new Date(now.getTime() - day * 86_400_000));
       const pastGames = await getGamesByDate(league, pastDate);
       const pastCompleted = pastGames.filter((g) => g.status === "final");

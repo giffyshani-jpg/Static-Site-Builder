@@ -1,0 +1,134 @@
+// TheSportsDB provider — free public API (no API key required for v1/json/3/).
+//
+// Documentation: https://www.thesportsdb.com/api.php
+// Free tier endpoints used here:
+//   Next 15 events  : /api/v1/json/3/eventsnextleague.php?id={leagueId}
+//   Past 15 events  : /api/v1/json/3/eventspastleague.php?id={leagueId}
+//   Season events   : /api/v1/json/3/eventsseason.php?id={leagueId}&s={season}
+//
+// Known league IDs used by this project:
+//   NZ NBL          : 5066   (New Zealand National Basketball League)
+//
+// Note: TSDB event data doesn't include live scores or play-by-play.
+// Use it only for schedule (upcoming/past) when no better source is available.
+
+const TSDB_BASE = "https://www.thesportsdb.com/api/v1/json/3";
+
+async function fetchTsdb(path) {
+  const url = `${TSDB_BASE}/${path}`;
+  const res = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json" },
+  });
+  if (!res.ok) throw new Error(`TheSportsDB ${res.status}: ${url}`);
+  return res.json();
+}
+
+/**
+ * Map a TheSportsDB event to our normalized Game shape.
+ * TSDB events have no live score, so status is always "scheduled" or "final"
+ * based on whether strStatus contains "Match Finished" or similar.
+ *
+ * @param {object} ev   raw TSDB event
+ * @param {string} leagueKey
+ */
+function normalizeEvent(ev, leagueKey) {
+  const isFinished = (ev.strStatus ?? "").toLowerCase().includes("match finished") ||
+    (ev.strStatus ?? "").toLowerCase() === "ft";
+
+  let startTimeIso = null;
+  let startTime = "";
+  if (ev.strTimestamp) {
+    try {
+      startTimeIso = new Date(ev.strTimestamp).toISOString();
+      startTime = new Intl.DateTimeFormat(undefined, {
+        hour: "numeric",
+        minute: "2-digit",
+      }).format(new Date(ev.strTimestamp));
+    } catch { /* ignore */ }
+  }
+
+  const homeScore = ev.intHomeScore != null ? Number(ev.intHomeScore) : null;
+  const awayScore = ev.intAwayScore != null ? Number(ev.intAwayScore) : null;
+
+  return {
+    id: ev.idEvent,
+    league: leagueKey,
+    homeTeam: {
+      id: ev.idHomeTeam ?? "",
+      name: ev.strHomeTeam ?? "Home",
+      abbreviation: (ev.strHomeTeam ?? "HOM").slice(0, 3).toUpperCase(),
+      score: homeScore,
+      players: [],
+    },
+    awayTeam: {
+      id: ev.idAwayTeam ?? "",
+      name: ev.strAwayTeam ?? "Away",
+      abbreviation: (ev.strAwayTeam ?? "AWY").slice(0, 3).toUpperCase(),
+      score: awayScore,
+      players: [],
+    },
+    startTime,
+    startTimeIso,
+    status: isFinished ? "final" : "scheduled",
+    period: "",
+    clock: "",
+  };
+}
+
+/**
+ * Fetches a league overview (upcoming + last played) from TheSportsDB.
+ * TSDB doesn't provide live scores, so `live` is always [].
+ *
+ * @param {string | number} leagueId  TSDB numeric league ID
+ * @param {string} leagueKey          our internal key, e.g. "nznbl"
+ */
+export async function getLeagueOverviewFromTsdb(leagueId, leagueKey) {
+  const [nextData, pastData] = await Promise.all([
+    fetchTsdb(`eventsnextleague.php?id=${leagueId}`).catch(() => ({ events: null })),
+    fetchTsdb(`eventspastleague.php?id=${leagueId}`).catch(() => ({ events: null })),
+  ]);
+
+  const upcoming = (nextData.events ?? [])
+    .filter((e) => e.strSport?.toLowerCase().includes("basketball") || !e.strSport)
+    .map((e) => normalizeEvent(e, leagueKey))
+    .filter((g) => g.status === "scheduled")
+    .sort(
+      (a, b) =>
+        new Date(a.startTimeIso ?? 0).getTime() -
+        new Date(b.startTimeIso ?? 0).getTime()
+    );
+
+  const past = (pastData.events ?? [])
+    .filter((e) => e.strSport?.toLowerCase().includes("basketball") || !e.strSport)
+    .map((e) => normalizeEvent(e, leagueKey))
+    .filter((g) => g.status === "final")
+    .sort(
+      (a, b) =>
+        new Date(b.startTimeIso ?? 0).getTime() -
+        new Date(a.startTimeIso ?? 0).getTime()
+    );
+
+  return {
+    live: [],                   // TSDB has no live scores
+    upcoming,
+    lastPlayed: past[0] ?? null,
+  };
+}
+
+/**
+ * Fetches today's events for a league from TSDB.
+ * Since TSDB has no live scores, returns scheduled events for today only.
+ * @param {string | number} leagueId
+ * @param {string} leagueKey
+ */
+export async function getTodayGamesFromTsdb(leagueId, leagueKey) {
+  try {
+    const data = await fetchTsdb(`eventsnextleague.php?id=${leagueId}`);
+    const today = new Date().toISOString().slice(0, 10);
+    return (data.events ?? [])
+      .filter((e) => (e.dateEvent ?? "") === today)
+      .map((e) => normalizeEvent(e, leagueKey));
+  } catch {
+    return [];
+  }
+}

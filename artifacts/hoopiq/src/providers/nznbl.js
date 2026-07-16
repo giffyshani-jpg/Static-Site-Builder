@@ -1,36 +1,88 @@
-// New Zealand NBL data provider adapter.
-// ESPN slug: "nznbl"
-// Source: site.api.espn.com/apis/site/v2/sports/basketball/nznbl
-// Season typically runs May–June.
+// New Zealand NBL provider.
 //
-// Note: If ESPN does not carry this league, getGamesByDate returns [] and the
-// league page will show "No upcoming games found" rather than crashing. The
-// provider contract is the same regardless.
+// The NZ NBL season typically runs May–August. ESPN returns HTTP 400 for the
+// "nznbl" slug, so this provider uses TheSportsDB (free public API, no key)
+// as its primary source, with ESPN as a graceful-empty fallback.
+//
+// TheSportsDB league ID for New Zealand NBL: 5066
+// Confirmed returning live-season data (July 2026 games verified).
+//
+// TheSportsDB limitations:
+//   - No live scores (status is always "scheduled" or "final")
+//   - No play-by-play or detailed box scores
+//   - Upcoming & past 15 events available
+//
+// Source chain (in priority order):
+//   1. TheSportsDB ID 5066 — schedule, upcoming, last played
+//   2. ESPN nznbl — graceful empty (ESPN returns 400, kept for future use)
 
+import { getLeagueOverviewFromTsdb, getTodayGamesFromTsdb } from "./thesportsdb";
 import * as espn from "./espn";
 
-const LEAGUE = "nznbl";
+const TSDB_LEAGUE_ID = 5066;
+const LEAGUE_KEY = "nznbl";
+const ESPN_SLUG = "nznbl"; // ESPN returns 400 for this, but kept for future
+
+// ─── Public provider contract ─────────────────────────────────────────────────
 
 export async function getTodayGames() {
-  return espn.getTodayGames(LEAGUE);
+  const tsdbGames = await getTodayGamesFromTsdb(TSDB_LEAGUE_ID, LEAGUE_KEY).catch(
+    () => []
+  );
+  if (tsdbGames.length > 0) return tsdbGames;
+  return espn.getTodayGames(ESPN_SLUG).catch(() => []);
 }
 
 export async function getGamesByDate(dateStr) {
-  return espn.getGamesByDate(LEAGUE, dateStr);
+  // TSDB doesn't support per-date queries in the free tier; delegate to ESPN
+  // (which returns 400 and is handled gracefully).
+  return espn.getGamesByDate(ESPN_SLUG, dateStr).catch(() => []);
 }
 
 export async function getGame(gameId) {
-  return espn.getGame(LEAGUE, gameId);
+  // TSDB free tier has no box score; ESPN returns 400.
+  // Return null gracefully so the UI can show a friendly message.
+  return espn.getGame(ESPN_SLUG, gameId).catch(() => null);
 }
 
 export async function getPlayerGameLog(athleteId) {
-  return espn.getPlayerGameLog(LEAGUE, athleteId);
+  return espn.getPlayerGameLog(ESPN_SLUG, athleteId).catch(() => []);
 }
 
 export async function getTeamSchedule(teamId) {
-  return espn.getTeamSchedule(LEAGUE, teamId);
+  return espn.getTeamSchedule(ESPN_SLUG, teamId).catch(() => []);
 }
 
-export async function getLeagueOverview(options) {
-  return espn.getLeagueOverview(LEAGUE, options);
+/**
+ * Timezone-safe overview for the New Zealand NBL.
+ *
+ * TheSportsDB is the authoritative source for upcoming and last-played games.
+ * It has no live scores, so `live` is always [] unless ESPN somehow returns
+ * data in the future.
+ */
+export async function getLeagueOverview({ scan = true } = {}) {
+  // Primary: TheSportsDB — has real NZ NBL schedule data
+  const tsdbResult = await getLeagueOverviewFromTsdb(
+    TSDB_LEAGUE_ID,
+    LEAGUE_KEY
+  ).catch((e) => {
+    console.warn("[nznbl] TheSportsDB overview failed:", e.message);
+    return null;
+  });
+
+  if (
+    tsdbResult &&
+    (tsdbResult.live.length > 0 ||
+      tsdbResult.upcoming.length > 0 ||
+      tsdbResult.lastPlayed)
+  ) {
+    return tsdbResult;
+  }
+
+  // Fallback: ESPN (will return empty due to 400, but doesn't crash)
+  const espnResult = await espn
+    .getLeagueOverview(ESPN_SLUG, { scan })
+    .catch(() => null);
+
+  return espnResult ?? tsdbResult ?? { live: [], upcoming: [], lastPlayed: null };
 }

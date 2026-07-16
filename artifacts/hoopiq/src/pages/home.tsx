@@ -123,6 +123,9 @@ function LeagueCard({
   loading: boolean;
 }) {
   const cfg = LEAGUE_CONFIGS[leagueKey];
+  // Guard: if the config doesn't exist for this key (e.g. stale cache from
+  // a previous session), skip rendering silently rather than crashing.
+  if (!cfg) return null;
   const [expanded, setExpanded] = useState(false);
 
   // Combine live + upcoming for the mini inline list.

@@ -98,6 +98,7 @@ export default function LeagueGames() {
   const league = params.league as string;
 
   const [overview, setOverview] = useState<LeagueOverview | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const valid = isValidLeague(league);
   const config = valid ? LEAGUE_CONFIGS[league] : null;
@@ -107,13 +108,20 @@ export default function LeagueGames() {
     let cancelled = false;
 
     setOverview(null);
+    setFetchError(null);
 
-    // scan: true — will search up to 45 UTC days forward/back when needed.
-    // This correctly handles off-season leagues (e.g. NBL between rounds)
-    // that have no games today or tomorrow.
-    fetchLeagueOverview(league, { scan: true }).then((data) => {
-      if (!cancelled) setOverview(data as LeagueOverview);
-    });
+    // scan: true — searches up to 180 UTC days forward/back so off-season
+    // leagues (e.g. NBL in July, season starts October) still show next game.
+    fetchLeagueOverview(league, { scan: true })
+      .then((data) => {
+        if (!cancelled) setOverview(data as LeagueOverview);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setFetchError(err?.message ?? "Unknown error");
+          setOverview({ live: [], upcoming: [], lastPlayed: null });
+        }
+      });
 
     return () => {
       cancelled = true;
@@ -138,6 +146,13 @@ export default function LeagueGames() {
   return (
     <MobileLayout showBack title={`${config.name} Schedule`}>
       <div className="p-4 sm:p-6 pb-12 bg-muted/20 min-h-full">
+
+        {/* Provider error banner — shown only when every source failed */}
+        {fetchError && (
+          <div className="mb-4 px-3 py-2 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-xs">
+            Data unavailable from providers — retrying automatically on next visit.
+          </div>
+        )}
 
         {/* ── Live Games ──────────────────────────────────────────────── */}
         {/* Only render the section when loading OR when there are live games.
