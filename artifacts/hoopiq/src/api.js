@@ -11,8 +11,6 @@ import * as wnbaProvider from "./providers/wnba";
 import * as nblProvider from "./providers/nbl";
 import * as nznblProvider from "./providers/nznbl";
 import * as fibaProvider from "./providers/fiba";
-import * as ncaamProvider from "./providers/ncaam";
-import * as ncaawProvider from "./providers/ncaaw";
 import * as nbaSummerProvider from "./providers/nba-summer";
 
 const PROVIDERS = {
@@ -21,8 +19,6 @@ const PROVIDERS = {
   nbl: nblProvider,
   nznbl: nznblProvider,
   fiba: fibaProvider,
-  ncaam: ncaamProvider,
-  ncaaw: ncaawProvider,
   "nba-summer": nbaSummerProvider,
 };
 
@@ -110,28 +106,6 @@ export const LEAGUE_CONFIGS = {
     textLight: "text-violet-200",
     active: true,
   },
-  ncaam: {
-    name: "NCAA Men",
-    fullName: "NCAA Men's Basketball",
-    description: "Men's College Basketball",
-    color: "red",
-    gradient: "from-red-900 to-slate-900",
-    accent: "text-red-400",
-    accentHover: "group-hover:text-red-300",
-    textLight: "text-red-200",
-    active: false, // Off-season; returns ~November
-  },
-  ncaaw: {
-    name: "NCAA Women",
-    fullName: "NCAA Women's Basketball",
-    description: "Women's College Basketball",
-    color: "pink",
-    gradient: "from-pink-900 to-slate-900",
-    accent: "text-pink-400",
-    accentHover: "group-hover:text-pink-300",
-    textLight: "text-pink-200",
-    active: false, // Off-season; returns ~November
-  },
 };
 
 /**
@@ -149,10 +123,10 @@ export const LEAGUE_CONFIGS = {
 export const ALL_LEAGUES = [
   "wnba",
   "nba",
+  "nba-summer",
   "nbl",
+  "nznbl",
   "fiba",
-  "ncaam",
-  "ncaaw",
 ];
 
 // --- Fetch functions -----------------------------------------------------

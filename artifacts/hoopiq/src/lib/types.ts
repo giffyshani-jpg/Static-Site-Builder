@@ -128,9 +128,7 @@ export type LeagueKey =
   | "wnba"
   | "nbl"
   | "nznbl"
-  | "fiba"
-  | "ncaam"
-  | "ncaaw";
+  | "fiba";
 
 export type Game = {
   id: string;
