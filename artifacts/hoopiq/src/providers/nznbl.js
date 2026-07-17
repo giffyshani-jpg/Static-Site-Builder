@@ -16,7 +16,7 @@
 //   1. TheSportsDB ID 5066 — schedule, upcoming, last played
 //   2. ESPN nznbl — graceful empty (ESPN returns 400, kept for future use)
 
-import { getLeagueOverviewFromTsdb, getTodayGamesFromTsdb } from "./thesportsdb";
+import { getLeagueOverviewFromTsdb, getTodayGamesFromTsdb, getGameFromTsdb } from "./thesportsdb";
 import * as espn from "./espn";
 
 const TSDB_LEAGUE_ID = 5066;
@@ -40,8 +40,14 @@ export async function getGamesByDate(dateStr) {
 }
 
 export async function getGame(gameId) {
-  // TSDB free tier has no box score; ESPN returns 400.
-  // Return null gracefully so the UI can show a friendly message.
+  // Primary: TheSportsDB lookupevent — works for TSDB event IDs (numeric
+  // strings like "2467092"). Returns team names, scores, and final status.
+  // TSDB free tier has no player-level box score, so players[] will be [].
+  const tsdbGame = await getGameFromTsdb(gameId, LEAGUE_KEY);
+  if (tsdbGame) return tsdbGame;
+
+  // Fallback: ESPN — returns 400 for the "nznbl" slug but kept for future
+  // compatibility if ESPN ever adds NZ NBL support.
   return espn.getGame(ESPN_SLUG, gameId).catch(() => null);
 }
 

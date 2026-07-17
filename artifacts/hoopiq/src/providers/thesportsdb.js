@@ -116,6 +116,36 @@ export async function getLeagueOverviewFromTsdb(leagueId, leagueKey) {
 }
 
 /**
+ * Fetch a single game by its TheSportsDB event ID.
+ * Uses the `lookupevent.php` endpoint which returns a single event with scores
+ * and status. Confirmed response shape (July 2026 NZ NBL test):
+ *   { idEvent, strEvent, strStatus:"FT", intHomeScore:"92", intAwayScore:"79",
+ *     strTimestamp:"2026-07-16T07:00:00", strSport:"Basketball" }
+ *
+ * Returns null if the event is not found or the request fails.
+ *
+ * @param {string | number} eventId  TSDB numeric event ID (e.g. "2467092")
+ * @param {string} leagueKey         our internal key, e.g. "nznbl"
+ * @returns {Promise<object|null>}   normalized Game or null
+ */
+export async function getGameFromTsdb(eventId, leagueKey) {
+  try {
+    const data = await fetchTsdb(`lookupevent.php?id=${eventId}`);
+    const events = data.events ?? [];
+    if (events.length === 0) return null;
+    const ev = events[0];
+    // Reject if the sport doesn't look like basketball (guard against TSDB ID
+    // collisions with other sports databases).
+    const sport = (ev.strSport ?? "").toLowerCase();
+    if (sport && !sport.includes("basketball")) return null;
+    return normalizeEvent(ev, leagueKey);
+  } catch (err) {
+    console.warn(`[thesportsdb] getGameFromTsdb(${eventId}) failed:`, err.message);
+    return null;
+  }
+}
+
+/**
  * Fetches today's events for a league from TSDB.
  * Since TSDB has no live scores, returns scheduled events for today only.
  * @param {string | number} leagueId

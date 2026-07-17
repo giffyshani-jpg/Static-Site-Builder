@@ -388,7 +388,9 @@ export default function BoxScore() {
             {visiblePlayers.length === 0 ? (
               <tr>
                 <td colSpan={12} className="px-4 py-10 text-center text-muted-foreground text-sm">
-                  No players match the current filters.
+                  {rosterPlayers.length === 0
+                    ? "Live player stats aren't available for this data source."
+                    : "No players match the current filters."}
                 </td>
               </tr>
             ) : (
