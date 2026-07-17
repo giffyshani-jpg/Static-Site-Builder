@@ -44,6 +44,25 @@ function LiveDot() {
   );
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Returns "Today", "Yesterday", "Jul 15", etc. relative to now. */
+function relativeDate(isoString: string | null | undefined): string {
+  if (!isoString) return "";
+  try {
+    const d = new Date(isoString);
+    const now = new Date();
+    const todayStr = now.toDateString();
+    const dStr = d.toDateString();
+    if (dStr === todayStr) return "Today";
+    const yest = new Date(now.getTime() - 86_400_000);
+    if (dStr === yest.toDateString()) return "Yesterday";
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  } catch {
+    return "";
+  }
+}
+
 // ─── Status chip ─────────────────────────────────────────────────────────────
 
 function LeagueStatusChip({
@@ -70,6 +89,8 @@ function LeagueStatusChip({
     );
   }
 
+  const lastDate = relativeDate(overview.lastPlayed?.startTimeIso);
+
   return (
     <span className="flex items-center gap-1.5 text-xs font-semibold">
       {liveCount > 0 && <LiveDot />}
@@ -78,7 +99,9 @@ function LeagueStatusChip({
           ? `${liveCount} live${upcomingCount > 0 ? ` · ${upcomingCount} upcoming` : ""}`
           : upcomingCount > 0
             ? `${upcomingCount} upcoming`
-            : "Check schedule"}
+            : lastDate
+              ? `Last played: ${lastDate}`
+              : "Check schedule"}
       </span>
     </span>
   );
@@ -134,6 +157,7 @@ function LeagueCard({
     ...(overview?.upcoming ?? []),
   ];
   const hasInline = inlineGames.length > 0;
+  const hasLastPlayed = !hasInline && !!overview?.lastPlayed;
 
   const liveCount = overview?.live.length ?? 0;
 
@@ -170,7 +194,7 @@ function LeagueCard({
         </div>
       </Link>
 
-      {/* Expandable inline games */}
+      {/* Expandable inline games (live / upcoming) */}
       {!loading && hasInline && (
         <div className="px-4 pb-4 sm:px-5 sm:pb-5">
           {expanded ? (
@@ -191,6 +215,30 @@ function LeagueCard({
               {liveCount > 0
                 ? `Show ${liveCount} live + ${overview!.upcoming.length} upcoming`
                 : `Show ${inlineGames.length} upcoming`}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Last played game — shown when no upcoming/live games exist */}
+      {!loading && hasLastPlayed && (
+        <div className="px-4 pb-4 sm:px-5 sm:pb-5">
+          {expanded ? (
+            <>
+              <GameCard game={overview!.lastPlayed!} />
+              <button
+                onClick={() => setExpanded(false)}
+                className="mt-2 w-full text-center text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors py-1"
+              >
+                Show less
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setExpanded(true)}
+              className={`text-xs font-semibold ${cfg.accent} hover:opacity-80 transition-opacity`}
+            >
+              Show last played
             </button>
           )}
         </div>
@@ -276,7 +324,7 @@ export default function Home() {
 
         {/* Source note */}
         <p className="text-[10px] text-muted-foreground/40 text-center pt-2">
-          Data via ESPN public API · EuroLeague / EuroCup not available via public sources
+          Data via ESPN (NBA/WNBA/NBL/FIBA) · TheSportsDB (NZ NBL) · Scores update live
         </p>
       </div>
     </MobileLayout>

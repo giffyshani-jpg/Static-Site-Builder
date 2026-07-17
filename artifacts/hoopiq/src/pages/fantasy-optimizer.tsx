@@ -484,6 +484,56 @@ export default function FantasyOptimizer() {
     });
   }
 
+  /**
+   * Auto-fill player credits based on each player's current FPTS relative to
+   * the pool average, scaled proportionally to the budget.
+   *
+   * Formula: credit = clamp(round((baseFpts / avgFpts) * (budget / LINEUP_SIZE)),
+   *          minCredit=20% of avg, maxCredit=40% of budget)
+   *
+   * When no FPTS data is available (scheduled game), distributes budget evenly.
+   * Does not touch players already in the lineup (to avoid mid-build disruption).
+   */
+  function handleSuggestCredits(overrideBudget?: number) {
+    const effectiveBudget = overrideBudget ?? budget;
+    if (players.length === 0) return;
+
+    const validPlayers = players.filter((p) => p.baseFpts > 0);
+    const targetAvgCredit = effectiveBudget / LINEUP_SIZE;
+    const maxCredit = Math.round(effectiveBudget * 0.4); // cap: star players at most 40% of budget
+    const minCredit = Math.max(1, Math.round(targetAvgCredit * 0.15)); // floor: at least 15% of avg
+
+    const newCredits: Record<string, number> = {};
+
+    if (validPlayers.length === 0) {
+      // No FPTS data (scheduled game) — distribute evenly across lineup slots
+      const even = Math.max(1, Math.round(targetAvgCredit));
+      for (const p of players) {
+        newCredits[p.id] = even;
+        setStoredPlayerCredits(p.id, even);
+      }
+    } else {
+      const avgFpts = validPlayers.reduce((s, p) => s + p.baseFpts, 0) / validPlayers.length;
+      for (const p of players) {
+        // Players with 0 FPTS (DNP/not-yet-played) get 50% of avg credit
+        const ratio = p.baseFpts > 0 ? p.baseFpts / avgFpts : 0.5;
+        const raw = Math.round(ratio * targetAvgCredit);
+        const clamped = Math.max(minCredit, Math.min(maxCredit, raw));
+        newCredits[p.id] = clamped;
+        setStoredPlayerCredits(p.id, clamped);
+      }
+    }
+
+    setCredits((prev) => ({ ...prev, ...newCredits }));
+  }
+
+  /** Apply a platform budget preset and immediately re-suggest credits. */
+  function handleBudgetPreset(presetBudget: number) {
+    setBudget(presetBudget);
+    setStoredBudget(presetBudget);
+    handleSuggestCredits(presetBudget);
+  }
+
   // ── Saved lineups handlers ───────────────────────────────────────────────
 
   function handleSaveLineup() {
@@ -677,6 +727,31 @@ export default function FantasyOptimizer() {
             </p>
           )}
 
+          {/* Platform budget presets */}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs text-muted-foreground font-medium">Platform preset</span>
+            <div className="flex flex-wrap gap-1.5">
+              {([
+                { label: "DraftKings", value: 50000 },
+                { label: "FanDuel", value: 60000 },
+                { label: "Custom (100)", value: 100 },
+              ] as const).map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => handleBudgetPreset(preset.value)}
+                  className={`text-xs font-semibold rounded-md px-2.5 py-1 border transition-colors active:scale-[0.97] ${
+                    budget === preset.value
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border text-muted-foreground hover:bg-muted/40"
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <label className="flex items-center justify-between gap-3">
             <span className="text-sm font-medium text-foreground">Budget</span>
             <input
@@ -685,15 +760,23 @@ export default function FantasyOptimizer() {
               inputMode="numeric"
               value={budget}
               onChange={(e) => handleBudgetChange(e.target.value)}
-              className="w-24 h-9 rounded-md border border-input bg-transparent px-3 text-right text-sm font-semibold tabular-nums shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="w-28 h-9 rounded-md border border-input bg-transparent px-3 text-right text-sm font-semibold tabular-nums shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
           </label>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => handleSuggestCredits()}
+              className="text-xs font-semibold text-primary border border-primary/40 rounded-md px-3 py-1.5 active:scale-[0.98] transition-transform hover:bg-primary/10"
+              title="Auto-fill player credits proportional to their FPTS"
+            >
+              ✦ Suggest Credits
+            </button>
             <button
               type="button"
               onClick={handleResetCredits}
-              className="text-xs font-semibold text-destructive border border-destructive-border rounded-md px-3 py-1.5 active:scale-[0.98] transition-transform"
+              className="text-xs font-semibold text-destructive border border-destructive/30 rounded-md px-3 py-1.5 active:scale-[0.98] transition-transform"
             >
               Reset Credits
             </button>
