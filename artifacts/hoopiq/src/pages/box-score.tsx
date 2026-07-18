@@ -387,10 +387,25 @@ export default function BoxScore() {
           <tbody className="divide-y divide-border">
             {visiblePlayers.length === 0 ? (
               <tr>
-                <td colSpan={12} className="px-4 py-10 text-center text-muted-foreground text-sm">
-                  {rosterPlayers.length === 0
-                    ? "Live player stats aren't available for this data source."
-                    : "No players match the current filters."}
+                <td colSpan={12} className="px-4 py-10 text-center text-sm">
+                  {rosterPlayers.length === 0 ? (
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                      <p>
+                        {league === "nznbl"
+                          ? "NZ NBL box scores come from TheSportsDB, which doesn't include player stats in the free tier."
+                          : league === "fiba"
+                            ? "Player stats aren't available for this FIBA event."
+                            : "Live player stats aren't available for this data source."}
+                      </p>
+                      {league === "nznbl" && (
+                        <p className="text-xs text-muted-foreground/60">
+                          Team scores and game schedules are still available above.
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground">No players match the current filters.</span>
+                  )}
                 </td>
               </tr>
             ) : (

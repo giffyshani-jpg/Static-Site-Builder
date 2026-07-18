@@ -4,6 +4,14 @@ All notable changes are appended here. Newest entries at the top.
 
 ---
 
+## [17f42e1] — Task 2: NBA and WNBA reliability and polish
+- Off-season banner on league pages for leagues with `active: false` (NBA, NBL)
+- Live auto-refresh every 30s on the league page when games are in progress
+- "Next game: [date]" subtitle in Upcoming section when next game is > 7 days away
+- Fixed inaccurate "next 45 days" message → now says "next 6 months" (matches the 180-day scan)
+- Off-season empty state now uses league-specific language
+- Auto-refresh timestamp indicator when live games are present
+
 ## [eb8ee2b] — Task 1: Fantasy Intelligence UX
 - Added Auto-Pick Best button (⚡): greedy fill of highest-FPTS active players within budget
 - Added Clear Lineup button: visible only when lineup has players

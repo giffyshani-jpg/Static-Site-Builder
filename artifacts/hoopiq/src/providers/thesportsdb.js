@@ -31,9 +31,48 @@ async function fetchTsdb(path) {
  * @param {object} ev   raw TSDB event
  * @param {string} leagueKey
  */
+/**
+ * Derive a short 3-letter abbreviation from a team name.
+ * Prefers the first 3 characters of the first word (city/region) to match
+ * the NBA-style convention (AUC for Auckland, WEL for Wellington, etc.).
+ * Falls back to full-name slice for single-word names.
+ */
+function makeAbbreviation(teamName) {
+  if (!teamName) return "UNK";
+  const words = teamName.trim().split(/\s+/).filter(Boolean);
+  // Single word (e.g. "Hawks"): first 3 chars.
+  if (words.length === 1) return words[0].slice(0, 3).toUpperCase();
+  // Multi-word: first 3 chars of the first word (city/region). This gives
+  // AUC (Auckland), WEL (Wellington), CAN (Canterbury), OTA (Otago), etc.
+  return words[0].slice(0, 3).toUpperCase();
+}
+
+/**
+ * Determine whether a TSDB event is finished.
+ * Handles: "Match Finished", "FT", "AET" (after extra time), "AP" (after penalties),
+ * and "Match Abandoned" (treat as final — scores exist, game won't continue).
+ */
+function isEventFinished(strStatus) {
+  const s = (strStatus ?? "").toLowerCase().trim();
+  return (
+    s.includes("match finished") ||
+    s === "ft" ||
+    s === "aet" ||         // after extra time
+    s === "ap" ||          // after penalties
+    s === "pso" ||         // penalty shoot-out completed
+    s.includes("abandoned")
+  );
+}
+
 function normalizeEvent(ev, leagueKey) {
-  const isFinished = (ev.strStatus ?? "").toLowerCase().includes("match finished") ||
-    (ev.strStatus ?? "").toLowerCase() === "ft";
+  const finished = isEventFinished(ev.strStatus);
+
+  // Postponed / cancelled games should stay as "scheduled" (not final)
+  // so they don't pollute the "Last Played" slot with a no-score entry.
+  const postponed =
+    (ev.strStatus ?? "").toLowerCase().includes("postponed") ||
+    (ev.strStatus ?? "").toLowerCase().includes("cancelled") ||
+    (ev.strStatus ?? "").toLowerCase().includes("canceled");
 
   let startTimeIso = null;
   let startTime = "";
@@ -56,20 +95,21 @@ function normalizeEvent(ev, leagueKey) {
     homeTeam: {
       id: ev.idHomeTeam ?? "",
       name: ev.strHomeTeam ?? "Home",
-      abbreviation: (ev.strHomeTeam ?? "HOM").slice(0, 3).toUpperCase(),
+      abbreviation: makeAbbreviation(ev.strHomeTeam ?? "HOM"),
       score: homeScore,
       players: [],
     },
     awayTeam: {
       id: ev.idAwayTeam ?? "",
       name: ev.strAwayTeam ?? "Away",
-      abbreviation: (ev.strAwayTeam ?? "AWY").slice(0, 3).toUpperCase(),
+      abbreviation: makeAbbreviation(ev.strAwayTeam ?? "AWY"),
       score: awayScore,
       players: [],
     },
     startTime,
     startTimeIso,
-    status: isFinished ? "final" : "scheduled",
+    // Postponed/cancelled events stay scheduled to avoid cluttering Last Played.
+    status: (finished && !postponed) ? "final" : "scheduled",
     period: "",
     clock: "",
   };

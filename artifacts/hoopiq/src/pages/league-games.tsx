@@ -298,13 +298,26 @@ export default function LeagueGames() {
         {loading ? (
           <Skeleton />
         ) : upcomingGames.length === 0 ? (
-          <EmptySection
-            message={
-              isOffSeason
-                ? `No ${config.name} games scheduled in the next 6 months.`
-                : `No upcoming ${config.name} games found in the next 6 months.`
-            }
-          />
+          league === "fiba" ? (
+            <div className="py-6 flex flex-col items-center gap-3 rounded-xl border border-border/50 border-dashed text-center px-4">
+              <p className="text-sm text-muted-foreground">
+                No FIBA events scheduled in the current window.
+              </p>
+              <p className="text-xs text-muted-foreground/60 max-w-[280px] leading-relaxed">
+                FIBA competitions run during designated international windows
+                (typically February, June, August, and November). Check back
+                closer to the next window.
+              </p>
+            </div>
+          ) : (
+            <EmptySection
+              message={
+                isOffSeason
+                  ? `No ${config.name} games scheduled in the next 6 months.`
+                  : `No upcoming ${config.name} games found in the next 6 months.`
+              }
+            />
+          )
         ) : (
           <GameGrid games={upcomingGames} />
         )}
