@@ -683,6 +683,70 @@ export default function FantasyOptimizer() {
     );
   }
 
+  // ── Clear lineup ──────────────────────────────────────────────────────────
+
+  function handleClearLineup() {
+    applyLineup({ playerIds: [], captainId: null, viceCaptainId: null });
+  }
+
+  // ── Auto-Pick Best ────────────────────────────────────────────────────────
+  //
+  // Greedy: pick the highest-FPTS active players that fit within the budget.
+  // If no credits are set, just picks the top LINEUP_SIZE by FPTS.
+  // Skips players who are OUT or marked didNotPlay.
+
+  function handleAutoPick() {
+    if (players.length === 0) return;
+
+    // Exclude players who definitely won't play.
+    const eligible = players.filter(
+      (p) => p.injuryStatus !== "OUT" && !p.didNotPlay,
+    );
+    const pool = eligible.length >= LINEUP_SIZE ? eligible : players;
+
+    // Sort highest FPTS first (fall back to alphabetical for ties).
+    const sorted = [...pool].sort((a, b) =>
+      b.baseFpts !== a.baseFpts
+        ? b.baseFpts - a.baseFpts
+        : a.name.localeCompare(b.name),
+    );
+
+    const hasCredits = Object.values(credits).some((c) => c !== undefined && c > 0);
+    const picked: string[] = [];
+
+    if (hasCredits && budget > 0) {
+      // Greedy within budget.
+      let remaining = budget;
+      for (const p of sorted) {
+        if (picked.length >= LINEUP_SIZE) break;
+        const cost = credits[p.id] ?? 0;
+        if (cost === 0 || remaining - cost >= 0) {
+          picked.push(p.id);
+          remaining -= cost;
+        }
+      }
+      // If greedy couldn't fill 8 (tight budget), top up from remaining pool.
+      if (picked.length < LINEUP_SIZE) {
+        for (const p of sorted) {
+          if (picked.length >= LINEUP_SIZE) break;
+          if (!picked.includes(p.id)) picked.push(p.id);
+        }
+      }
+    } else {
+      // No credits configured — just take top LINEUP_SIZE by FPTS.
+      for (const p of sorted) {
+        if (picked.length >= LINEUP_SIZE) break;
+        picked.push(p.id);
+      }
+    }
+
+    applyLineup({
+      playerIds: picked.slice(0, LINEUP_SIZE),
+      captainId: null,
+      viceCaptainId: null,
+    });
+  }
+
   // ── Loading / error states ───────────────────────────────────────────────
 
   if (game === null) {
@@ -767,6 +831,15 @@ export default function FantasyOptimizer() {
           <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
+              onClick={handleAutoPick}
+              disabled={players.length === 0}
+              className="text-xs font-semibold text-emerald-400 border border-emerald-500/40 rounded-md px-3 py-1.5 active:scale-[0.98] transition-transform hover:bg-emerald-500/10 disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Auto-fill lineup with highest-FPTS players within budget"
+            >
+              ⚡ Auto-Pick Best
+            </button>
+            <button
+              type="button"
               onClick={() => handleSuggestCredits()}
               className="text-xs font-semibold text-primary border border-primary/40 rounded-md px-3 py-1.5 active:scale-[0.98] transition-transform hover:bg-primary/10"
               title="Auto-fill player credits proportional to their FPTS"
@@ -780,6 +853,16 @@ export default function FantasyOptimizer() {
             >
               Reset Credits
             </button>
+            {lineup.playerIds.length > 0 && (
+              <button
+                type="button"
+                onClick={handleClearLineup}
+                className="text-xs font-semibold text-muted-foreground border border-border rounded-md px-3 py-1.5 active:scale-[0.98] transition-transform hover:text-destructive hover:border-destructive/40"
+                title="Clear the current lineup"
+              >
+                Clear Lineup
+              </button>
+            )}
             <button
               type="button"
               disabled={!isLineupValid}
@@ -796,7 +879,17 @@ export default function FantasyOptimizer() {
         </div>
 
         {/* ── Lineup summary grid ───────────────────────────────────────── */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-px bg-border sticky top-0 z-10">
+        <div className="sticky top-0 z-10 border-b border-border bg-card">
+          {/* Progress bar */}
+          <div className="h-1 w-full bg-border">
+            <div
+              className={`h-full transition-all duration-300 ${
+                lineup.playerIds.length === LINEUP_SIZE ? "bg-primary" : "bg-primary/60"
+              }`}
+              style={{ width: `${(lineup.playerIds.length / LINEUP_SIZE) * 100}%` }}
+            />
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-px bg-border">
           {/* Lineup size */}
           <div className="bg-card p-3 flex flex-col gap-1">
             <span className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
@@ -862,12 +955,19 @@ export default function FantasyOptimizer() {
               Remaining
             </span>
             <span
-              className={`text-xl font-bold tabular-nums ${remainingCredits < 0 ? "text-destructive" : "text-foreground"}`}
+              className={`text-xl font-bold tabular-nums ${
+                remainingCredits < 0
+                  ? "text-destructive"
+                  : budget > 0 && remainingCredits / budget < 0.2
+                    ? "text-amber-400"
+                    : "text-foreground"
+              }`}
             >
               {remainingCredits}
             </span>
           </div>
-        </div>
+          </div>{/* /grid */}
+        </div>{/* /sticky */}
 
         {/* ── Validation messages ───────────────────────────────────────── */}
         {validationErrors.length > 0 && (
@@ -1369,7 +1469,7 @@ export default function FantasyOptimizer() {
           {/* Avoid players already used in previous saved teams */}
           <div className="flex items-center justify-between gap-3">
             <span className="text-xs font-medium text-muted-foreground">
-              Avoid players already used in previous saved teams
+              Avoid players used in other lineups
             </span>
             <button
               type="button"
@@ -1388,7 +1488,20 @@ export default function FantasyOptimizer() {
         {/* ── Player list ───────────────────────────────────────────────── */}
         <div className="flex flex-col gap-2 px-4 pb-12">
           {visiblePlayers.length === 0 ? (
-            <div className="py-12 text-center text-muted-foreground text-sm">No players found.</div>
+            search || teamFilter !== "all" || positionFilter !== "all" || favoritesOnly ? (
+              <div className="py-12 text-center text-muted-foreground text-sm">No players match your filters.</div>
+            ) : (
+              <div className="py-10 flex flex-col items-center gap-4 text-center">
+                <div className="text-4xl select-none">🏀</div>
+                <div className="flex flex-col gap-1">
+                  <p className="text-sm font-semibold text-foreground">Ready to build your lineup</p>
+                  <p className="text-xs text-muted-foreground max-w-[240px] leading-relaxed">
+                    Tap <span className="font-semibold text-emerald-400">⚡ Auto-Pick Best</span> to fill instantly,
+                    or tap <span className="font-semibold text-primary">✦ Suggest Credits</span> then select players manually.
+                  </p>
+                </div>
+              </div>
+            )
           ) : (
             visiblePlayers.map((player) => {
               const isInLineup = lineup.playerIds.includes(player.id);
