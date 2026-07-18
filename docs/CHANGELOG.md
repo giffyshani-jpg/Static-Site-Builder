@@ -4,13 +4,13 @@ All notable changes are appended here. Newest entries at the top.
 
 ---
 
-## [Unreleased] — Task 1: Fantasy Intelligence UX
-- Added Auto-Pick Best button: fills lineup with top FPTS players within budget
-- Added Clear Lineup button for quick lineup reset
-- Added lineup progress bar under the slot counter
-- Remaining credits now shows amber color when < 20% of budget remains (but still positive)
-- Shortened "Avoid players already used in previous saved teams" toggle label to "Avoid players used in other lineups"
-- Improved player list empty state to guide users when no players are selected
+## [eb8ee2b] — Task 1: Fantasy Intelligence UX
+- Added Auto-Pick Best button (⚡): greedy fill of highest-FPTS active players within budget
+- Added Clear Lineup button: visible only when lineup has players
+- Added lineup progress bar (thin bar above summary grid, animates as slots fill)
+- Remaining credits now amber when 1–19% of budget left (warning zone), red when negative
+- Shortened "Avoid players already used" toggle label
+- Improved player list empty state: onboarding hint when 0 players / no filters active
 
 ---
 
