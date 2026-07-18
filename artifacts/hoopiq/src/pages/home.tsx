@@ -1,31 +1,38 @@
 // Home page — HoopIQ basketball hub.
 //
-// Shows a card for every supported league. Each card displays:
-//   • A LIVE pill + live game count when games are in progress.
-//   • Live games inline (up to 2), then upcoming.
-//   • A "View all" link to the full league schedule page.
+// Layout philosophy (new product direction):
+//   • NBA and WNBA are #1 and #2 priority — full-width premium cards at top.
+//   • Everything else (NBL, NZ NBL, FIBA, Summer League) lives under a single
+//     collapsible "Other Basketball" group so the primary leagues dominate.
 //
-// Data is fetched via fetchLeagueOverview({ scan: false }) — the fast
-// 3-date merge (yesterday/today/tomorrow in UTC) without forward scanning.
-// This gives correct live detection even in IST / other UTC-offset zones
-// while keeping the home page load fast. The per-league page does the
-// deeper scan when needed.
+// Summer League is hidden automatically when it has no live/upcoming games
+// (Phase 2). Provider code is untouched — it reappears next season on its own.
+//
+// Data: fetchLeagueOverview({ scan: false }) — fast 3-date merge (yesterday /
+// today / tomorrow UTC) for home-page paint. Per-league pages do the deeper
+// scan when needed.
 
 import React, { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { MobileLayout } from "../components/layout";
 import { GameCard } from "../components/game-card";
-import { LEAGUE_CONFIGS, ALL_LEAGUES, fetchLeagueOverview } from "../api";
+import {
+  LEAGUE_CONFIGS,
+  PRIMARY_LEAGUES,
+  SECONDARY_LEAGUES,
+  ALL_LEAGUES,
+  fetchLeagueOverview,
+} from "../api";
 import { Game, LeagueKey, LeagueOverview } from "../lib/types";
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
 
-function ChevronRight() {
+function ChevronRight({ size = 14 }: { size?: number }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      width="14"
-      height="14"
+      width={size}
+      height={size}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -34,6 +41,24 @@ function ChevronRight() {
       strokeLinejoin="round"
     >
       <path d="m9 18 6-6-6-6" />
+    </svg>
+  );
+}
+
+function ChevronDown({ size = 14 }: { size?: number }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="m6 9 6 6 6-6" />
     </svg>
   );
 }
@@ -134,31 +159,29 @@ function MiniGameList({
   );
 }
 
-// ─── League card ─────────────────────────────────────────────────────────────
+// ─── Premium league card (NBA / WNBA) ────────────────────────────────────────
 
-function LeagueCard({
+function PremiumLeagueCard({
   leagueKey,
   overview,
   loading,
+  emoji,
 }: {
   leagueKey: LeagueKey;
   overview: LeagueOverview | null;
   loading: boolean;
+  emoji: string;
 }) {
   const cfg = LEAGUE_CONFIGS[leagueKey];
-  // Guard: if the config doesn't exist for this key (e.g. stale cache from
-  // a previous session), skip rendering silently rather than crashing.
   if (!cfg) return null;
   const [expanded, setExpanded] = useState(false);
 
-  // Combine live + upcoming for the mini inline list.
   const inlineGames: Game[] = [
     ...(overview?.live ?? []),
     ...(overview?.upcoming ?? []),
   ];
   const hasInline = inlineGames.length > 0;
   const hasLastPlayed = !hasInline && !!overview?.lastPlayed;
-
   const liveCount = overview?.live.length ?? 0;
 
   return (
@@ -167,12 +190,13 @@ function LeagueCard({
     >
       {/* Card header */}
       <Link href={`/${leagueKey}`}>
-        <div className="flex items-start justify-between p-4 sm:p-5 cursor-pointer group">
+        <div className="flex items-start justify-between p-5 sm:p-6 cursor-pointer group">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-0.5">
-              <h3 className="text-xl font-black tracking-tighter text-white">
+            <div className="flex items-center gap-2.5 mb-1">
+              <span className="text-2xl leading-none select-none">{emoji}</span>
+              <h2 className="text-2xl sm:text-3xl font-black tracking-tighter text-white">
                 {cfg.name}
-              </h3>
+              </h2>
               {!loading && liveCount > 0 && (
                 <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-primary/20 text-primary rounded-full px-2 py-0.5 border border-primary/30">
                   <LiveDot /> LIVE
@@ -182,21 +206,21 @@ function LeagueCard({
             <p className={`text-xs ${cfg.textLight} opacity-70 truncate`}>
               {cfg.description}
             </p>
-            <div className="mt-1.5">
+            <div className="mt-2">
               <LeagueStatusChip overview={overview} loading={loading} />
             </div>
           </div>
           <span
             className={`${cfg.accentHover} transition-colors text-muted-foreground/40 shrink-0 mt-1`}
           >
-            <ChevronRight />
+            <ChevronRight size={16} />
           </span>
         </div>
       </Link>
 
       {/* Expandable inline games (live / upcoming) */}
       {!loading && hasInline && (
-        <div className="px-4 pb-4 sm:px-5 sm:pb-5">
+        <div className="px-5 pb-5 sm:px-6 sm:pb-6">
           {expanded ? (
             <>
               <MiniGameList games={inlineGames} league={leagueKey} />
@@ -213,7 +237,7 @@ function LeagueCard({
               className={`text-xs font-semibold ${cfg.accent} hover:opacity-80 transition-opacity`}
             >
               {liveCount > 0
-                ? `Show ${liveCount} live + ${overview!.upcoming.length} upcoming`
+                ? `Show ${liveCount} live${overview!.upcoming.length > 0 ? ` + ${overview!.upcoming.length} upcoming` : ""}`
                 : `Show ${inlineGames.length} upcoming`}
             </button>
           )}
@@ -222,7 +246,7 @@ function LeagueCard({
 
       {/* Last played game — shown when no upcoming/live games exist */}
       {!loading && hasLastPlayed && (
-        <div className="px-4 pb-4 sm:px-5 sm:pb-5">
+        <div className="px-5 pb-5 sm:px-6 sm:pb-6">
           {expanded ? (
             <>
               <GameCard game={overview!.lastPlayed!} />
@@ -247,31 +271,162 @@ function LeagueCard({
   );
 }
 
+// ─── Secondary league row (inside "Other Basketball") ────────────────────────
+
+/**
+ * Human-readable labels for secondary leagues inside the "Other Basketball"
+ * group. These override LEAGUE_CONFIGS[key].name when a clearer label is
+ * needed in this context.
+ */
+const SECONDARY_LABEL: Partial<Record<LeagueKey, string>> = {
+  nbl: "Australia NBL",
+  "nba-summer": "Summer League",
+};
+
+function SecondaryLeagueRow({
+  leagueKey,
+  overview,
+  loading,
+}: {
+  leagueKey: LeagueKey;
+  overview: LeagueOverview | null;
+  loading: boolean;
+}) {
+  const cfg = LEAGUE_CONFIGS[leagueKey];
+  if (!cfg) return null;
+  const label = SECONDARY_LABEL[leagueKey] ?? cfg.name;
+
+  return (
+    <Link href={`/${leagueKey}`}>
+      <div className="flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors group cursor-pointer">
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-white/90">{label}</p>
+          <div className="mt-0.5">
+            <LeagueStatusChip overview={overview} loading={loading} />
+          </div>
+        </div>
+        <span className="text-muted-foreground/40 group-hover:text-muted-foreground/70 transition-colors shrink-0 ml-2">
+          <ChevronRight />
+        </span>
+      </div>
+    </Link>
+  );
+}
+
+// ─── "Other Basketball" grouped card ─────────────────────────────────────────
+
+/**
+ * Groups all secondary leagues under one card. Summer League is shown only
+ * when it has live or upcoming games (Phase 2 — auto-hide when inactive).
+ */
+function OtherBasketballCard({
+  overviews,
+  loadingSet,
+}: {
+  overviews: Partial<Record<LeagueKey, LeagueOverview>>;
+  loadingSet: Set<LeagueKey>;
+}) {
+  const [expanded, setExpanded] = useState(true);
+
+  // Determine which secondary leagues to render.
+  // Summer League is hidden when it has no live or upcoming games.
+  const summerOverview = overviews["nba-summer"];
+  const summerActive =
+    loadingSet.has("nba-summer") || // still loading → keep visible to avoid flicker
+    (summerOverview &&
+      (summerOverview.live.length > 0 || summerOverview.upcoming.length > 0));
+
+  const visibleSecondary = (SECONDARY_LEAGUES as LeagueKey[]).filter((k) => {
+    if (k === "nba-summer") return summerActive;
+    return true;
+  });
+
+  // Aggregate live + upcoming count across visible secondary leagues for the summary line.
+  const totalLive = visibleSecondary.reduce(
+    (n, k) => n + (overviews[k]?.live.length ?? 0),
+    0
+  );
+  const totalUpcoming = visibleSecondary.reduce(
+    (n, k) => n + (overviews[k]?.upcoming.length ?? 0),
+    0
+  );
+  const anyLoading = visibleSecondary.some((k) => loadingSet.has(k));
+
+  const summaryText = anyLoading
+    ? "Loading…"
+    : totalLive > 0
+      ? `${totalLive} live · ${totalUpcoming} upcoming`
+      : totalUpcoming > 0
+        ? `${totalUpcoming} upcoming`
+        : "No games this week";
+
+  return (
+    <div className="rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 border border-white/5 shadow-lg overflow-hidden">
+      {/* Group header */}
+      <button
+        className="w-full flex items-center justify-between p-4 sm:p-5 group"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-xl leading-none select-none">🌍</span>
+          <div className="text-left">
+            <h2 className="text-lg font-black tracking-tighter text-white leading-tight">
+              Other Basketball
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">{summaryText}</p>
+          </div>
+        </div>
+        <span className="text-muted-foreground/50 group-hover:text-muted-foreground transition-colors shrink-0">
+          {expanded ? <ChevronDown /> : <ChevronRight />}
+        </span>
+      </button>
+
+      {/* League rows */}
+      {expanded && (
+        <div className="border-t border-white/5">
+          {visibleSecondary.map((leagueKey, i) => (
+            <React.Fragment key={leagueKey}>
+              {i > 0 && <div className="h-px bg-white/5 mx-4" />}
+              <SecondaryLeagueRow
+                leagueKey={leagueKey}
+                overview={overviews[leagueKey] ?? null}
+                loading={loadingSet.has(leagueKey)}
+              />
+            </React.Fragment>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Home() {
   const [overviewByLeague, setOverviewByLeague] = useState<
     Partial<Record<LeagueKey, LeagueOverview>>
   >({});
-  const [loading, setLoading] = useState(true);
+  // Track which leagues are still fetching (absent from overviewByLeague).
+  const [loadingSet, setLoadingSet] = useState<Set<LeagueKey>>(
+    new Set(ALL_LEAGUES as LeagueKey[])
+  );
 
   useEffect(() => {
     let cancelled = false;
 
     // Fetch all leagues in parallel. scan: false for fast home-page paint.
-    const promises = ALL_LEAGUES.map((league) =>
+    (ALL_LEAGUES as LeagueKey[]).forEach((league) => {
       fetchLeagueOverview(league, { scan: false }).then((data) => {
         if (!cancelled) {
-          setOverviewByLeague((prev) => ({
-            ...prev,
-            [league]: data as LeagueOverview,
-          }));
+          setOverviewByLeague((prev) => ({ ...prev, [league]: data as LeagueOverview }));
+          setLoadingSet((prev) => {
+            const next = new Set(prev);
+            next.delete(league);
+            return next;
+          });
         }
-      })
-    );
-
-    Promise.all(promises).then(() => {
-      if (!cancelled) setLoading(false);
+      });
     });
 
     return () => {
@@ -279,17 +434,16 @@ export default function Home() {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const totalLive = ALL_LEAGUES.reduce(
-    (n, l) =>
-      n + (overviewByLeague[l as LeagueKey]?.live.length ?? 0),
+  // Headline numbers shown in the page subtitle.
+  const totalLive = (ALL_LEAGUES as LeagueKey[]).reduce(
+    (n, l) => n + (overviewByLeague[l]?.live.length ?? 0),
     0
   );
-
-  const totalUpcoming = ALL_LEAGUES.reduce(
-    (n, l) =>
-      n + (overviewByLeague[l as LeagueKey]?.upcoming.length ?? 0),
+  const totalUpcoming = (ALL_LEAGUES as LeagueKey[]).reduce(
+    (n, l) => n + (overviewByLeague[l]?.upcoming.length ?? 0),
     0
   );
+  const anyLoading = loadingSet.size > 0;
 
   return (
     <MobileLayout>
@@ -300,7 +454,7 @@ export default function Home() {
             HoopIQ
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            {loading
+            {anyLoading
               ? "Loading games across all leagues…"
               : totalLive > 0
                 ? `${totalLive} game${totalLive !== 1 ? "s" : ""} live now · ${totalUpcoming} upcoming`
@@ -310,21 +464,31 @@ export default function Home() {
           </p>
         </div>
 
-        {/* League cards grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {ALL_LEAGUES.map((league) => (
-            <LeagueCard
-              key={league}
-              leagueKey={league as LeagueKey}
-              overview={overviewByLeague[league as LeagueKey] ?? null}
-              loading={!(league in overviewByLeague)}
-            />
-          ))}
-        </div>
+        {/* ── Premium: NBA ── */}
+        <PremiumLeagueCard
+          leagueKey="nba"
+          overview={overviewByLeague["nba"] ?? null}
+          loading={loadingSet.has("nba")}
+          emoji="🏀"
+        />
+
+        {/* ── Premium: WNBA ── */}
+        <PremiumLeagueCard
+          leagueKey="wnba"
+          overview={overviewByLeague["wnba"] ?? null}
+          loading={loadingSet.has("wnba")}
+          emoji="🏀"
+        />
+
+        {/* ── Other Basketball (secondary leagues grouped) ── */}
+        <OtherBasketballCard
+          overviews={overviewByLeague}
+          loadingSet={loadingSet}
+        />
 
         {/* Source note */}
         <p className="text-[10px] text-muted-foreground/40 text-center pt-2">
-          Data via ESPN (NBA/WNBA/NBL/FIBA) · TheSportsDB (NZ NBL) · Scores update live
+          Data via ESPN (NBA · WNBA · NBL · FIBA · Summer League) · TheSportsDB (NZ NBL) · Scores update live
         </p>
       </div>
     </MobileLayout>

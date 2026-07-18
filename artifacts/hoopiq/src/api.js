@@ -114,20 +114,27 @@ export const LEAGUE_CONFIGS = {
 /**
  * Ordered list of leagues shown on the home page.
  * Data source status (July 2026):
+ *   nba        → ESPN (off-season, next game Oct 2026)
  *   wnba       → ESPN (live ✅)
  *   nba-summer → ESPN NBA type-3 filter + NBA CDN fallback (active ✅)
- *   nba        → ESPN (off-season, next game Oct 2026)
  *   nbl        → ESPN (off-season, next game Oct 2026)
  *   nznbl      → TheSportsDB ID 5066 (in-season ✅)
  *   fiba       → ESPN (varies by tournament)
  */
+
+/** NBA and WNBA — rendered as full-width premium cards on the home page. */
+export const PRIMARY_LEAGUES = ["nba", "wnba"];
+
+/**
+ * Secondary leagues — grouped under "Other Basketball" on the home page.
+ * Summer League is rendered conditionally (only when it has live/upcoming games).
+ */
+export const SECONDARY_LEAGUES = ["nbl", "nznbl", "fiba", "nba-summer"];
+
+/** Full ordered list — used internally (data fetching, routing). */
 export const ALL_LEAGUES = [
-  "wnba",
-  "nba-summer",
-  "nba",
-  "nbl",
-  "nznbl",
-  "fiba",
+  ...PRIMARY_LEAGUES,
+  ...SECONDARY_LEAGUES,
 ];
 
 // ─── Fetch helpers ────────────────────────────────────────────────────────────
