@@ -828,6 +828,42 @@ export default function FantasyOptimizer() {
             />
           </label>
 
+          {/* Credit usage bar — shows spent vs. remaining vs. budget */}
+          {budget > 0 && (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="text-muted-foreground">
+                  {totalCreditsUsed > 0 ? `${totalCreditsUsed.toLocaleString()} used` : "No credits assigned"}
+                </span>
+                <span
+                  className={
+                    remainingCredits < 0
+                      ? "text-destructive font-semibold"
+                      : budget > 0 && remainingCredits / budget < 0.15
+                        ? "text-amber-400 font-semibold"
+                        : "text-muted-foreground"
+                  }
+                >
+                  {remainingCredits < 0
+                    ? `${Math.abs(remainingCredits).toLocaleString()} over budget`
+                    : `${remainingCredits.toLocaleString()} remaining`}
+                </span>
+              </div>
+              <div className="h-1.5 w-full bg-border rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-300 ${
+                    remainingCredits < 0
+                      ? "bg-destructive"
+                      : totalCreditsUsed / budget > 0.85
+                        ? "bg-amber-500"
+                        : "bg-primary"
+                  }`}
+                  style={{ width: `${Math.min((totalCreditsUsed / budget) * 100, 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
@@ -969,28 +1005,74 @@ export default function FantasyOptimizer() {
           </div>{/* /grid */}
         </div>{/* /sticky */}
 
-        {/* ── Validation messages ───────────────────────────────────────── */}
-        {validationErrors.length > 0 && (
-          <div className="mx-4 mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 flex flex-col gap-1.5">
-            <p className="text-[10px] font-bold tracking-wider uppercase text-amber-500">
-              Lineup Requirements
+        {/* ── Lineup requirements checklist ─────────────────────────────── */}
+        {lineupPlayers.length > 0 && (
+          <div className={`mx-4 mt-3 rounded-xl border px-4 py-3 flex flex-col gap-2 ${
+            isLineupValid
+              ? "border-emerald-500/30 bg-emerald-500/10"
+              : "border-amber-500/30 bg-amber-500/10"
+          }`}>
+            <p className="text-[10px] font-bold tracking-wider uppercase text-muted-foreground">
+              Lineup checklist
             </p>
-            {validationErrors.map((err, i) => (
-              <div key={i} className="flex items-start gap-2">
-                <span className="mt-0.5 shrink-0 w-3.5 h-3.5 rounded-full border-2 border-amber-500/60" />
-                <p className="text-xs text-amber-200 leading-snug">{validationMessage(err)}</p>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Valid lineup confirmation */}
-        {isLineupValid && lineupPlayers.length > 0 && (
-          <div className="mx-4 mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-400 shrink-0">
-              <path d="M20 6 9 17l-5-5" />
-            </svg>
-            <p className="text-xs font-semibold text-emerald-300">Lineup is valid — ready to export</p>
+            {/* Players filled */}
+            {(() => {
+              const playersDone = lineup.playerIds.length === LINEUP_SIZE;
+              return (
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs font-bold shrink-0 ${playersDone ? "text-emerald-400" : "text-muted-foreground"}`}>
+                    {playersDone ? "✓" : "○"}
+                  </span>
+                  <span className={`text-xs ${playersDone ? "text-muted-foreground" : "text-foreground/80"}`}>
+                    {lineup.playerIds.length}/{LINEUP_SIZE} players selected
+                  </span>
+                </div>
+              );
+            })()}
+            {/* Captain */}
+            {(() => {
+              const captainDone = !!lineup.captainId;
+              return (
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs font-bold shrink-0 ${captainDone ? "text-emerald-400" : "text-amber-400"}`}>
+                    {captainDone ? "✓" : "○"}
+                  </span>
+                  <span className={`text-xs ${captainDone ? "text-muted-foreground" : "text-amber-200/80"}`}>
+                    {captainDone
+                      ? `Captain: ${players.find((p) => p.id === lineup.captainId)?.name ?? "—"} (×2.0)`
+                      : "Set a Captain (×2.0) — tap C on any selected player"}
+                  </span>
+                </div>
+              );
+            })()}
+            {/* Vice Captain */}
+            {(() => {
+              const vcDone = !!lineup.viceCaptainId;
+              return (
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs font-bold shrink-0 ${vcDone ? "text-emerald-400" : "text-amber-400"}`}>
+                    {vcDone ? "✓" : "○"}
+                  </span>
+                  <span className={`text-xs ${vcDone ? "text-muted-foreground" : "text-amber-200/80"}`}>
+                    {vcDone
+                      ? `Vice Captain: ${players.find((p) => p.id === lineup.viceCaptainId)?.name ?? "—"} (×1.5)`
+                      : "Set a Vice Captain (×1.5) — tap VC on any selected player"}
+                  </span>
+                </div>
+              );
+            })()}
+            {/* Team limit violations */}
+            {validationErrors
+              .filter((e) => e.kind === "team_limit")
+              .map((e, i) => (
+                <div key={i} className="flex items-start gap-2">
+                  <span className="text-xs font-bold shrink-0 text-destructive">✕</span>
+                  <span className="text-xs text-destructive/80 leading-snug">{validationMessage(e)}</span>
+                </div>
+              ))}
+            {isLineupValid && (
+              <p className="text-[10px] font-semibold text-emerald-400 mt-1">✓ Lineup is valid — ready to export</p>
+            )}
           </div>
         )}
 
@@ -1600,7 +1682,7 @@ export default function FantasyOptimizer() {
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); assignCaptain(player.id); }}
-                          className={`w-7 h-7 rounded-full text-[10px] font-black border transition-colors flex items-center justify-center ${
+                          className={`w-8 h-8 rounded-full text-[11px] font-black border transition-colors flex items-center justify-center ${
                             role === "captain"
                               ? "bg-yellow-500 text-yellow-950 border-yellow-400"
                               : "border-border text-muted-foreground hover:bg-yellow-500/10 hover:border-yellow-500/40 hover:text-yellow-400"
@@ -1613,7 +1695,7 @@ export default function FantasyOptimizer() {
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); assignViceCaptain(player.id); }}
-                          className={`w-7 h-7 rounded-full text-[10px] font-black border transition-colors flex items-center justify-center ${
+                          className={`w-8 h-8 rounded-full text-[11px] font-black border transition-colors flex items-center justify-center ${
                             role === "vice_captain"
                               ? "bg-sky-500 text-sky-950 border-sky-400"
                               : "border-border text-muted-foreground hover:bg-sky-500/10 hover:border-sky-500/40 hover:text-sky-400"

@@ -154,6 +154,54 @@ async function safeCall(fn, fallback, label) {
   }
 }
 
+// ── League overview cache ─────────────────────────────────────────────────────
+//
+// fetchLeagueOverview with scan:true can hit dozens of ESPN endpoints. Cache the
+// result per (league × scan flag) for 2 minutes so navigating back and forth
+// between the home page and league page doesn't retrigger the full scan.
+//
+// Two layers:
+//   1. In-memory Map<key, {data, fetchedAt}> — fastest, cleared on page reload.
+//   2. sessionStorage JSON — survives component unmount/remount within the session.
+//
+// If two calls arrive simultaneously with the same key the in-flight Map coalesces
+// them into a single network request so only one fetch happens regardless of how
+// many components mount at the same time.
+
+const OVERVIEW_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+const OVERVIEW_MEM_CACHE = new Map(); // key → { data, fetchedAt }
+const OVERVIEW_IN_FLIGHT = new Map(); // key → Promise
+
+function overviewCacheKey(league, scan) {
+  return `${league}:${scan ? "1" : "0"}`;
+}
+
+function getOverviewFromCache(key) {
+  // 1. Memory
+  const mem = OVERVIEW_MEM_CACHE.get(key);
+  if (mem && Date.now() - mem.fetchedAt < OVERVIEW_CACHE_TTL) return mem.data;
+  // 2. sessionStorage
+  try {
+    const raw = sessionStorage.getItem("hoopiq:overview:" + key);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Date.now() - parsed.fetchedAt < OVERVIEW_CACHE_TTL) {
+        OVERVIEW_MEM_CACHE.set(key, parsed); // promote to memory
+        return parsed.data;
+      }
+    }
+  } catch {}
+  return null;
+}
+
+function setOverviewCache(key, data) {
+  const entry = { data, fetchedAt: Date.now() };
+  OVERVIEW_MEM_CACHE.set(key, entry);
+  try {
+    sessionStorage.setItem("hoopiq:overview:" + key, JSON.stringify(entry));
+  } catch {}
+}
+
 /**
  * Today's games for a league.
  * @param {string} league
@@ -187,11 +235,31 @@ export async function fetchGamesByLeagueAndDate(league, dateStr) {
  * @param {{ scan?: boolean }} [options]
  */
 export async function fetchLeagueOverview(league, options) {
-  return safeCall(
+  const scan = options?.scan ?? false;
+  const key = overviewCacheKey(league, scan);
+
+  // Return cached data when fresh.
+  const cached = getOverviewFromCache(key);
+  if (cached) return cached;
+
+  // Coalesce concurrent requests — only one network call per key at a time.
+  if (OVERVIEW_IN_FLIGHT.has(key)) return OVERVIEW_IN_FLIGHT.get(key);
+
+  const promise = safeCall(
     () => getProvider(league).getLeagueOverview(options),
     EMPTY_OVERVIEW,
     `fetchLeagueOverview(${league})`
-  );
+  ).then((result) => {
+    OVERVIEW_IN_FLIGHT.delete(key);
+    if (result && result !== EMPTY_OVERVIEW) setOverviewCache(key, result);
+    return result;
+  }).catch((err) => {
+    OVERVIEW_IN_FLIGHT.delete(key);
+    throw err;
+  });
+
+  OVERVIEW_IN_FLIGHT.set(key, promise);
+  return promise;
 }
 
 /**
