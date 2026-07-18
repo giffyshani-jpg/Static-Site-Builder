@@ -4,6 +4,13 @@ All notable changes are appended here. Newest entries at the top.
 
 ---
 
+## [67a6aa4] — Task 3: Other Basketball (NBL/NZ NBL/FIBA) polish
+- NZ NBL box score: provider-specific message explaining TheSportsDB doesn't include player stats
+- FIBA league page: dedicated empty state explaining international tournament windows (Feb/Jun/Aug/Nov)
+- thesportsdb.js: smarter status detection — handles AET, AP, PSO, "Abandoned", "Postponed", "Cancelled"
+- thesportsdb.js: extracted `makeAbbreviation()` helper (first word, 3 chars — matches NBA city convention)
+- thesportsdb.js: postponed/cancelled events stay "scheduled" to avoid polluting Last Played slot
+
 ## [17f42e1] — Task 2: NBA and WNBA reliability and polish
 - Off-season banner on league pages for leagues with `active: false` (NBA, NBL)
 - Live auto-refresh every 30s on the league page when games are in progress

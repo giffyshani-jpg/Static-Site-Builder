@@ -46,20 +46,29 @@
 - [x] Forward/backward scan for off-season leagues
 - [x] Graceful safeCall fallback on all providers
 
-## 🚧 In Progress
+## ✅ Completed (this session)
 
-### Task 1: Fantasy Intelligence UX
-- [ ] Auto-Pick Best lineup button (fill with top FPTS players within budget)
-- [ ] Clear Lineup button
-- [ ] Lineup progress bar
-- [ ] Improved remaining credits visual (amber warning zone)
-- [ ] Compact "Avoid used" toggle label
+### Task 1: Fantasy Intelligence UX — [eb8ee2b]
+- [x] Auto-Pick Best lineup button (fill with top FPTS players within budget)
+- [x] Clear Lineup button (visible only when lineup has players)
+- [x] Lineup progress bar above the summary grid
+- [x] Remaining credits goes amber when < 20% of budget left
+- [x] "Avoid used" toggle label shortened
+- [x] Onboarding empty state in player list
 
-### Task 2: NBA and WNBA reliability and polish
-- [ ] TBD after Task 1 commit
+### Task 2: NBA and WNBA reliability and polish — [17f42e1]
+- [x] Off-season banner for leagues with `active: false`
+- [x] Live auto-refresh every 30s while games are in progress
+- [x] "Next game: [date]" subtitle when next game is > 7 days away
+- [x] Accurate "next 6 months" message (was "45 days")
+- [x] Auto-refresh timestamp shown when live
 
-### Task 3: Other Basketball (NBL/NZ NBL/FIBA) polish
-- [ ] TBD after Task 2 commit
+### Task 3: Other Basketball (NBL/NZ NBL/FIBA) polish — [67a6aa4]
+- [x] NZ NBL box score: provider-specific no-data message
+- [x] FIBA league page: tournament-window empty state with schedule context
+- [x] thesportsdb.js: AET/AP/PSO/Abandoned status handling
+- [x] thesportsdb.js: Postponed/Cancelled events stay "scheduled"
+- [x] thesportsdb.js: `makeAbbreviation()` extracted as named helper
 
 ## 📋 Future / Nice-to-Have
 - [ ] EuroLeague / EuroCup (blocked: no public API)

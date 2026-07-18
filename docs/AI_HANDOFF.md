@@ -1,56 +1,57 @@
 # HoopIQ — AI Handoff
 
 ## Latest Commit
-`c028048` — feat(Phase 1+2): redesign home page — NBA/WNBA premium cards, Other Basketball group, Summer League auto-hide
+`67a6aa4` — feat(Task 3): Other Basketball polish — NZ NBL box score context, FIBA tournament window message, thesportsdb status handling
 
-## Current Project State
-- App is a mobile-first React+Vite SPA in `artifacts/hoopiq/`
-- All three task groups are in progress (Task 1 first, per workflow rules)
-- Docs directory just created at `docs/` (PROJECT_CONTEXT, ROADMAP, CHANGELOG, AI_HANDOFF, KNOWN_ISSUES)
-- Workflow name: `HoopIQ` — runs `pnpm --filter @workspace/hoopiq run dev`
+## All Three Tasks — COMPLETE
 
-## Current Task
-**Task 1: Improve Fantasy Intelligence UX** (in progress)
-
-Changes being made to `artifacts/hoopiq/src/pages/fantasy-optimizer.tsx`:
-1. `handleAutoPick()` — greedy best-FPTS within budget, skips OUT/DNP players
-2. `handleClearLineup()` — clears all 8 slots + C/VC roles
-3. Lineup progress bar (visual slot fill indicator)
-4. Remaining credits color: amber when 1–19% of budget remaining
-5. "Auto-Pick Best" + "Clear" buttons in the controls row
-6. Shorten "Avoid players already used in previous saved teams" → "Avoid players used in other lineups"
-
-## Remaining Tasks (in order)
-1. **Task 2**: Improve NBA and WNBA reliability and polish
-   - Investigate what "reliability" means: possibly improve error states, add retry logic, better loading skeletons
-   - Polish: cleaner game cards, better score display, improved typography
-2. **Task 3**: Improve Other Basketball (NBL/NZ NBL/FIBA) without adding new providers
-   - NZ NBL: better empty states for missing box score data
-   - FIBA: graceful handling of between-tournament periods
-   - NBL: off-season messaging
-
-## Important Implementation Notes
-- **Never import from providers directly** — always go through `src/api.js`
-- **safeCall wraps every provider** — never remove it
-- **LINEUP_SIZE = 8**, **MAX_SAME_TEAM = 4** (from `src/lib/lineup-storage.ts`)
-- **LeagueKey** union type in `src/lib/types.ts` must be updated if leagues change
-- `game.league` field must be set correctly on all returned games (Summer League bug was fixed in 39c4235)
-- TheSportsDB NZ NBL returns no player-level stats — don't try to render box score players for NZ NBL games
-- ESPN API base: `https://site.api.espn.com/apis/site/v2/sports/basketball`
-- Gamelog base: `https://site.web.api.espn.com/apis/common/v3/sports/basketball`
+| Task | Commit | Description |
+|------|--------|-------------|
+| Task 1 | eb8ee2b | Fantasy Intelligence UX — Auto-Pick, Clear, progress bar, amber credits, docs |
+| Task 2 | 17f42e1 | NBA/WNBA reliability — off-season banner, live auto-refresh, next-game date |
+| Task 3 | 67a6aa4 | Other Basketball — NZ NBL box score message, FIBA window context, TSDB status |
 
 ## Files Modified (this session)
-- `docs/PROJECT_CONTEXT.md` (created)
-- `docs/ROADMAP.md` (created)
-- `docs/CHANGELOG.md` (created)
-- `docs/AI_HANDOFF.md` (created)
-- `docs/KNOWN_ISSUES.md` (created)
-- `artifacts/hoopiq/src/pages/fantasy-optimizer.tsx` (Task 1 changes)
+
+### New files
+- `docs/PROJECT_CONTEXT.md`
+- `docs/ROADMAP.md`
+- `docs/CHANGELOG.md`
+- `docs/AI_HANDOFF.md`
+- `docs/KNOWN_ISSUES.md`
+
+### Modified
+- `artifacts/hoopiq/src/pages/fantasy-optimizer.tsx` — Task 1 changes
+- `artifacts/hoopiq/src/pages/league-games.tsx` — Task 2 + Task 3 changes
+- `artifacts/hoopiq/src/pages/box-score.tsx` — Task 3 NZ NBL/FIBA box score messages
+- `artifacts/hoopiq/src/providers/thesportsdb.js` — Task 3 status handling + abbreviation helper
 
 ## What the Next AI Session Must Know
-- Read `docs/PROJECT_CONTEXT.md` before touching any provider or api.js
-- The app has NO backend — all data is client-side fetch from public ESPN/TSDB APIs
-- Checking typecheck: `pnpm --filter @workspace/hoopiq run typecheck`
-- Building: `pnpm --filter @workspace/hoopiq run build` (needs PORT env var from workflow)
-- The Summer League `nba-summer` provider hits the NBA scoreboard and filters for `seasonType.type === 3` events
-- NZ NBL uses TheSportsDB league ID 5066 — not ESPN
+
+### Architecture
+- **No backend** — all data from public ESPN/TheSportsDB APIs via browser fetch (CORS open)
+- Provider contract: all UI imports via `src/api.js`, never directly from providers
+- `safeCall()` wraps every provider call — never remove it
+- `LINEUP_SIZE = 8`, `MAX_SAME_TEAM = 4` (lineup-storage.ts)
+
+### League status (July 2026)
+- **NBA**: off-season, next game ~Oct 2026, `active: false`
+- **WNBA**: in-season, active ✅
+- **NBA Summer League**: active during July, `active: true`
+- **NBL**: off-season, next game ~Oct 2026, `active: false`
+- **NZ NBL**: in-season (May–Aug), TheSportsDB source, `active: true`
+- **FIBA**: varies by tournament, `active: true`
+
+### Key invariants
+- `game.league` must always be set correctly (Summer League was a past bug)
+- NZ NBL games have `players: []` by design — TheSportsDB free tier has no player stats
+- thesportsdb.js: `isEventFinished()` now handles AET/AP/PSO/Abandoned; postponed/cancelled stay "scheduled"
+- League page: FIBA gets a tournament-window specific empty state; NBA/NBL get off-season banner
+- Fantasy Optimizer: `handleAutoPick()` skips OUT/DNP players; doesn't assign C/VC (known limitation)
+
+### Dev commands
+- Typecheck: `pnpm --filter @workspace/hoopiq run typecheck`
+- Dev server: `pnpm --filter @workspace/hoopiq run dev` (workflow `HoopIQ`, port 5173)
+
+## Next Steps (if any)
+No further tasks requested. See `docs/ROADMAP.md` for future ideas.
