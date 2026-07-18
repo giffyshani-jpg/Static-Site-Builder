@@ -1,14 +1,56 @@
 import React from "react";
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
 
 interface MobileLayoutProps {
   children: React.ReactNode;
   title?: string;
   showBack?: boolean;
+  /** Override the back destination. When omitted the parent route is derived
+   *  automatically from the current URL path. */
+  backHref?: string;
 }
 
-export function MobileLayout({ children, title, showBack = false }: MobileLayoutProps) {
-  const [_, setLocation] = useLocation();
+/**
+ * Derive the logical parent route from the current pathname so the back
+ * button always lands on a meaningful HoopIQ page, even on a direct/shared
+ * URL where the browser history stack is empty.
+ *
+ * Route hierarchy:
+ *   /:league/game/:id/optimizer|plays|compare  →  /:league/game/:id
+ *   /:league/game/:id                          →  /:league
+ *   /:league/player/:playerId                  →  /:league
+ *   /:league                                   →  /
+ *   /                                          →  / (no-op; showBack should be false here)
+ */
+function deriveBackHref(pathname: string): string {
+  const segs = pathname.split("/").filter(Boolean);
+
+  // /:league/game/:id/optimizer|plays|compare  (4 segments)
+  if (segs.length === 4 && segs[1] === "game") {
+    return `/${segs[0]}/game/${segs[2]}`;
+  }
+  // /:league/game/:id  (3 segments, second is "game")
+  if (segs.length === 3 && segs[1] === "game") {
+    return `/${segs[0]}`;
+  }
+  // /:league/player/:playerId  (3 segments, second is "player")
+  if (segs.length === 3 && segs[1] === "player") {
+    return `/${segs[0]}`;
+  }
+  // /:league  (1 segment)
+  if (segs.length === 1) {
+    return "/";
+  }
+  return "/";
+}
+
+export function MobileLayout({ children, title, showBack = false, backHref }: MobileLayoutProps) {
+  const [pathname, setLocation] = useLocation();
+
+  function handleBack() {
+    const dest = backHref ?? deriveBackHref(pathname);
+    setLocation(dest);
+  }
 
   return (
     <div className="min-h-[100dvh] bg-background text-foreground flex justify-center">
@@ -16,8 +58,8 @@ export function MobileLayout({ children, title, showBack = false }: MobileLayout
         {/* Header */}
         <header className="flex items-center h-14 sm:h-16 px-4 sm:px-6 border-b border-border bg-background sticky top-0 z-10 shrink-0 sm:rounded-t-2xl">
           {showBack && (
-            <button 
-              onClick={() => window.history.back()}
+            <button
+              onClick={handleBack}
               className="mr-3 p-1.5 -ml-1 text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/40"
               aria-label="Go back"
             >

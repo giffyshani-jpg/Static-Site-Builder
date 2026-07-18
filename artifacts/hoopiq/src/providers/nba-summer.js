@@ -35,7 +35,11 @@ export async function getGamesByDate(dateStr) {
 
 export async function getGame(gameId) {
   // Box scores are per game-id; delegate to ESPN which handles the summary URL.
-  return espn.getGame(NBA_SLUG, gameId);
+  // ESPN normalises game objects with its own "nba" slug, so we must override
+  // the league field to keep "nba-summer" throughout the entire app flow.
+  const game = await espn.getGame(NBA_SLUG, gameId);
+  if (game) game.league = "nba-summer";
+  return game;
 }
 
 export async function getPlayerGameLog(athleteId) {
