@@ -101,7 +101,7 @@ function LeagueStatusChip({
     return <span className="text-xs text-muted-foreground/50">Loading…</span>;
   }
   if (!overview) {
-    return <span className="text-xs text-muted-foreground/50">No data</span>;
+    return <span className="text-xs text-muted-foreground/50">Unavailable</span>;
   }
 
   const liveCount = overview.live.length;
