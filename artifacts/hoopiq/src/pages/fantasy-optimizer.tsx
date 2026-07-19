@@ -1085,6 +1085,88 @@ export default function FantasyOptimizer() {
           </div>
         )}
 
+        {/* ── Lineup slot visualization ─────────────────────────────────── */}
+        {lineupPlayers.length > 0 && (
+          <div className="mx-4 mt-3 rounded-xl border border-border bg-card overflow-hidden">
+            <p className="px-3 py-2 border-b border-border bg-background text-[10px] font-bold tracking-wider uppercase text-muted-foreground">
+              Roster Slots ({lineupPlayers.length}/{LINEUP_SIZE})
+            </p>
+            <div className="divide-y divide-border/40">
+              {(() => {
+                // Build ordered slot list: C role first, VC second, remaining FLEX, then empty.
+                const captainPlayer = players.find((p) => p.id === lineup.captainId);
+                const vcPlayer = players.find((p) => p.id === lineup.viceCaptainId);
+                const flexPlayers = lineupPlayers.filter(
+                  (p) => p.id !== lineup.captainId && p.id !== lineup.viceCaptainId
+                );
+                const emptyCount = LINEUP_SIZE - lineupPlayers.length;
+
+                type SlotDef =
+                  | { kind: "captain"; player: typeof captainPlayer }
+                  | { kind: "vc"; player: typeof vcPlayer }
+                  | { kind: "flex"; player: (typeof lineupPlayers)[number] }
+                  | { kind: "empty" };
+
+                const slots: SlotDef[] = [
+                  { kind: "captain", player: captainPlayer },
+                  { kind: "vc", player: vcPlayer },
+                  ...flexPlayers.map((p) => ({ kind: "flex" as const, player: p })),
+                  ...Array.from({ length: emptyCount }, () => ({ kind: "empty" as const })),
+                ];
+
+                return slots.map((slot, idx) => {
+                  const isEmpty = slot.kind === "empty" || (slot.kind !== "flex" && !slot.player);
+                  const name =
+                    slot.kind === "flex" ? slot.player.name
+                    : slot.kind === "captain"
+                      ? slot.player?.name ?? null
+                      : slot.kind === "vc"
+                        ? slot.player?.name ?? null
+                        : null;
+                  const roleLabel = slot.kind === "captain" ? "C" : slot.kind === "vc" ? "VC" : "F";
+                  const mult = slot.kind === "captain" ? "×2.0" : slot.kind === "vc" ? "×1.5" : null;
+                  const roleCls =
+                    slot.kind === "captain"
+                      ? "bg-yellow-500 text-yellow-950"
+                      : slot.kind === "vc"
+                        ? "bg-sky-500 text-sky-950"
+                        : "bg-muted/60 text-muted-foreground";
+
+                  return (
+                    <div
+                      key={idx}
+                      className={`flex items-center gap-2.5 px-3 py-2 ${isEmpty ? "opacity-40" : ""}`}
+                    >
+                      <span
+                        className={`inline-flex items-center justify-center w-7 h-5 rounded text-[9px] font-black shrink-0 ${roleCls}`}
+                      >
+                        {roleLabel}
+                      </span>
+                      <span className={`flex-1 text-xs truncate ${name ? "text-foreground font-medium" : "text-muted-foreground italic"}`}>
+                        {name
+                          ? name
+                          : slot.kind === "captain"
+                            ? "Set Captain — tap C on a player"
+                            : slot.kind === "vc"
+                              ? "Set Vice Captain — tap VC on a player"
+                              : "Empty slot"}
+                      </span>
+                      {mult && name && (
+                        <span className="text-[10px] font-semibold tabular-nums text-muted-foreground shrink-0">
+                          {mult}
+                        </span>
+                      )}
+                      {(slot.kind === "captain" || slot.kind === "vc") && !name && (
+                        <span className="text-[10px] font-semibold text-amber-400/80 shrink-0">Required</span>
+                      )}
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+        )}
+
         {/* ── Multiplier legend ─────────────────────────────────────────── */}
         <div className="mx-4 mt-3 flex items-center gap-3 text-[11px] text-muted-foreground">
           <span className="flex items-center gap-1">
