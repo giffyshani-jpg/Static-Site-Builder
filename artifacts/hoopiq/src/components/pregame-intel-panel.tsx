@@ -335,8 +335,28 @@ export function PregameIntelPanel({
       )}
 
       {loading ? (
-        <div className="p-8 text-center text-muted-foreground text-sm">
-          Loading lineups &amp; injury reports…
+        <div className="p-4 flex flex-col gap-3">
+          {/* Skeleton for team availability cards */}
+          <div className="flex gap-2">
+            <div className="flex-1 h-16 rounded-lg bg-muted/40 animate-pulse" />
+            <div className="flex-1 h-16 rounded-lg bg-muted/40 animate-pulse" />
+          </div>
+          {/* Skeleton for player rows */}
+          <div className="rounded-xl border border-border overflow-hidden">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div
+                key={i}
+                className="flex items-center gap-3 px-4 py-3 border-b border-border last:border-b-0"
+              >
+                <div className="flex-1 flex flex-col gap-1.5">
+                  <div className="h-3.5 w-32 rounded bg-muted/50 animate-pulse" />
+                  <div className="h-3 w-48 rounded bg-muted/40 animate-pulse" />
+                </div>
+                <div className="h-6 w-14 rounded-md bg-muted/40 animate-pulse shrink-0" />
+              </div>
+            ))}
+          </div>
+          <p className="text-center text-[11px] text-muted-foreground/50">Loading lineups &amp; injury reports…</p>
         </div>
       ) : (
         <>

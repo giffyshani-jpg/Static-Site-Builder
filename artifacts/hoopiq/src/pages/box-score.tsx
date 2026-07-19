@@ -99,7 +99,7 @@ export default function BoxScore() {
   const gameId = params.id;
   const league = params.league as import("../lib/types").LeagueKey;
 
-  const { game, lastUpdated, isLive } = useLiveGame(gameId, league);
+  const { game, lastUpdated, isLive, isStale } = useLiveGame(gameId, league);
 
   const [activeTab, setActiveTab] = useState<BoxScoreTab>("away");
   const [positionFilter, setPositionFilter] = useState("all");
@@ -264,12 +264,17 @@ export default function BoxScore() {
           </div>
         </div>
 
-        {/* Last updated */}
-        {lastUpdated && (
+        {/* Last updated / stale indicator */}
+        {isStale && isLive ? (
+          <p className="mt-2 text-[10px] text-amber-400 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+            Reconnecting…
+          </p>
+        ) : lastUpdated ? (
           <p className="mt-2 text-[10px] text-muted-foreground">
             {isLive ? "Auto-updating · " : ""}Updated {formatTime(lastUpdated)}
           </p>
-        )}
+        ) : null}
 
         <div className="mt-5 w-full max-w-[280px] sm:max-w-sm grid grid-cols-1 sm:grid-cols-2 gap-2">
           <Link href={`/${game.league}/game/${game.id}/optimizer`}>
