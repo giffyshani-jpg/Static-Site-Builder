@@ -4,42 +4,81 @@ All notable changes to HoopIQ are documented here in reverse-chronological order
 
 ---
 
-## [Unreleased] — Polish Pass (Tasks 1–5)
+## [Unreleased] — Reliability & Intelligence Pass (July 2026)
+
+### Fix — broken imports
+- Restored `Link` (wouter) import in `box-score.tsx` and `useRef` import in `fantasy-optimizer.tsx` — both had been removed incorrectly by a prior automated pass, causing a runtime crash on the box score page.
+
+### Feat — game detail cache (`api.js`)
+- `fetchGameById` now caches results in-memory with status-aware TTLs: 30 s for `in_progress` games, 2 min for `scheduled`, 5 min for `final`.
+- Poll loops in `use-live-game.ts` pass `{ noCache: true }` so live/pregame updates always hit the network; the result is still written to cache so remounts after a poll see fresh data instead of refetching.
+- Concurrent initial mounts share a single in-flight Promise via an in-flight Map (same dedup pattern as the overview cache).
+
+### Feat — opponent matchup context in Pre-Game Intel panel
+- Each player row in `pregame-intel-panel.tsx` now shows a subtle `vs <ABBR>` or `@ <ABBR>` tag after the position label so fantasy users can see the matchup without scrolling to the team header.
+
+### Feat — collapsible filter panel in Fantasy Optimizer
+- Sort row (always visible) gains a **Filters** toggle button. Team filter, position filter, Favorites Only, and Avoid Used toggles collapse behind it.
+- A badge on the Filters button shows the count of active non-default filters so the list never looks silently filtered.
+- Filter panel auto-opens on load when saved preferences contain non-default values.
+- `aria-expanded` and `aria-label` set on the toggle for keyboard/screen-reader users.
+
+### Feat — lineup slot visualization in Fantasy Optimizer
+- A new **Roster Slots** card appears below the requirements checklist whenever any player is selected. Shows all 8 slots in order: Captain (C ×2.0), Vice Captain (VC ×1.5), then up to 6 FLEX rows.
+- Empty C/VC slots show an inline hint ("Set Captain — tap C on a player") and a Required badge.
+- Improves C/VC assignment discoverability on first use.
+
+### Feat — live update error handling (`use-live-game.ts`, `box-score.tsx`)
+- `useLiveGame` now tracks consecutive empty/undefined poll responses via a `stallCount` ref. After 2 consecutive misses the hook sets `isStale: true`.
+- `box-score.tsx` surfaces this as an amber **Reconnecting…** pulse indicator, replacing the "Auto-updating" text. Resets automatically when the next poll succeeds.
+
+### Feat — pregame panel skeleton loading state
+- The "Loading lineups & injury reports…" plain-text loading message replaced with animated skeleton bars for the team availability cards and player rows, consistent with the box score and player detail skeletons.
+
+### Docs
+- Created `docs/PROJECT_CONTEXT.md` — single-page project orientation for any new agent.
+- Created `docs/KNOWN_ISSUES.md` — tracked limitations, design decisions, and resolved bugs.
+
+---
+
+## [Phase 2 Polish] — July 2026 (committed earlier)
+
+### Skeleton loading states
+- `play-by-play.tsx`: "Loading game…" replaced with 4 animated skeleton bars.
+- `player-detail.tsx`: "Loading game log from ESPN…" replaced with 3 skeleton bars + subtle label.
+- `home.tsx`: "No data" chip text improved to "Unavailable".
+
+---
+
+## [Phase 1 Polish] — Tasks 1–5, July 2026 (commit 33140a3)
 
 ### Task 1 — Fantasy Intelligence panel (`pregame-intel-panel.tsx`)
-- **Redesigned `PlayerIntelRow`**: replaced dense single-row chip layout with a two-section design — name/badges row + a clean metrics row (Proj Min · FPTS L5 with 🔥/❄️ · Min Trend only when non-flat · Confidence).
-- **Confidence indicator**: new "High / Moderate / Low" signal derived from `consistency` rating, starter status, B2B flag, and injury designation. Color-coded green / amber / rose.
-- **Simplified blowout risk banner**: from verbose multi-sentence explanation to a concise one-liner (⚡ `{risk} blowout risk · {X} pt spread · Favored team's starters may rest in Q4`). Only shown for Medium and High risk — Low was noise.
-- **OUT players dimmed**: opacity-55 + no metrics row + explicit "OUT" chip instead of recommendation badge.
-- **B2B shown on team availability cards**: each card now shows a "B2B" pill when the team is on back-to-back nights.
-- **Header simplified**: panel label + tip-off time + refresh timestamp in one compact strip. Removed the verbose "Auto-updating · Updated HH:MM:SS" format.
-- **"No injury concerns" line**: availability cards now show this only when there actually are no OUT/GTD players — removes the previous noisy "Out: None" line.
-- **Methodology footnote**: condensed and placed at the bottom of the panel.
+- Redesigned `PlayerIntelRow`: two-section design — name/badges row + metrics row (Proj Min · FPTS L5 with 🔥/❄️ · Min Trend only when non-flat · Confidence).
+- Confidence indicator: "High / Moderate / Low" derived from consistency, starter status, B2B, injury. Color-coded green / amber / rose.
+- Blowout risk simplified to one-liner (only Medium/High shown).
+- OUT players dimmed, no projections shown.
+- B2B pill on team availability cards.
+- Header simplified; methodology footnote moved to bottom.
 
 ### Task 2 — Player detail sheet (`player-detail-sheet.tsx`)
-- **Color-coded bar chart**: bars now reflect performance relative to average — green ≥ 110%, red ≤ 90%, purple within ±10%. Makes hot/cold stretches visible at a glance.
-- **Average reference line**: thin dashed horizontal line across the bar chart at the average FPTS height.
-- **FPTS value labels**: each bar now shows its FPTS value below the bar (was invisible before).
-- **Trend badge moved to chart header**: `RecentFormBadge` is now right-aligned next to the chart title with a context label ("above avg / below avg / on avg").
-- **"View Full Game Log" button moved up**: now appears immediately after the status badges, near the top of the sheet, instead of at the very bottom.
-- **Scheduled game stats hidden**: "This Game" stat grid is now hidden when `gameStatus === "scheduled"` — was showing misleading all-zero stats.
-- **Cleaner "App Avg" label**: renamed from "Season Avg*" (confusing footnote). Now shows inline `{N} tracked` sub-label and the footnote explains app-tracked vs. official.
-- **Empty form state improved**: clear explanation that form builds as you view box scores, with a dashed placeholder card.
-- **"Last N Fantasy Games" heading**: now says "Last {N} Viewed Games" (using actual count) and "Recent Form" when empty — removes the misleading "Last 5" when nothing is tracked.
+- Color-coded bar chart (green ≥ 110%, red ≤ 90%, purple within ±10%).
+- Average reference line on bar chart.
+- FPTS value labels on bars.
+- "View Full Game Log" button moved to top.
+- Scheduled game stats hidden.
+- "App Avg" label (was "Season Avg*").
+- Better empty form state.
 
 ### Task 3 — Optimizer polish (`fantasy-optimizer.tsx`)
-- **Credit usage visualization bar**: visual progress bar below the budget input shows credits used vs. remaining. Color shifts amber when >85% used, red when over budget.
-- **Unified requirements checklist**: replaced separate amber error banner + green valid banner with a single persistent checklist (players filled ✓/○, Captain ✓/○ with name, Vice Captain ✓/○ with name, team limit violations). Visible as soon as any player is selected.
-- **Actionable C/VC hints**: when Captain or Vice Captain is not set, the checklist item reads "Set a Captain (×2.0) — tap C on any selected player" to guide the user.
-- **Larger C/VC role buttons**: increased from `w-7 h-7` to `w-8 h-8` for easier mobile tapping.
+- Credit usage visualization bar (amber >85%, red over budget).
+- Unified requirements checklist (replaces separate error + valid banners).
+- Larger C/VC role buttons (28px → 32px).
 
 ### Task 4 — Performance (`api.js`)
-- **League overview cache**: `fetchLeagueOverview` results cached for 2 minutes using a two-layer strategy (in-memory Map + sessionStorage JSON). Eliminates redundant full scans when navigating Back → League page.
-- **In-flight deduplication**: concurrent calls with the same `(league, scan)` key share a single network request via a Promise Map — no duplicate fetches when multiple components mount simultaneously.
-- **Failure passthrough**: failed fetches are never cached so the next call retries properly.
+- League overview cache: 2-min TTL + in-memory + sessionStorage dual-layer.
+- In-flight deduplication for `fetchLeagueOverview`.
 
 ### Task 5 — Bug fixes
-- `player-detail-sheet`: "This Game" stats hidden on scheduled games (was showing misleading zeros).
-- `player-detail-sheet`: "Last N Fantasy Games" no longer shows "5" when zero games are tracked.
-- `pregame-intel-panel`: OUT players no longer show projected minutes or a recommendation — projections are meaningless for players not playing.
-- `pregame-intel-panel`: B2B pill now appears on team availability cards as well as individual player rows (was only on player rows before).
+- Scheduled game stats no longer show misleading zeros.
+- OUT player projections suppressed.
+- Form heading shows real game count.

@@ -14,6 +14,16 @@ Tracks planned improvements, in-progress work, and longer-horizon ideas.
 
 ## Completed
 
+### Reliability & Intelligence Pass — July 2026
+- ✅ Game detail cache (30s live · 2min scheduled · 5min final TTL) — eliminates remount refetches
+- ✅ Poll-loop noCache opt-out — live/pregame polls always hit network; cache stays warm for remounts
+- ✅ Opponent matchup context in pre-game panel (vs / @ abbreviation on each player row)
+- ✅ Collapsible filter panel in Optimizer — sort always visible, secondary filters behind Filters toggle with active-count badge
+- ✅ Lineup slot visualization — 8 named roster rows (C → VC → FLEX → empty) with role hints
+- ✅ Live update error handling — `isStale` / Reconnecting… amber indicator after 2 consecutive poll misses
+- ✅ Pregame panel skeleton loading state
+- ✅ Broken import fixes (Link in box-score, useRef in optimizer)
+
 ### Polish Pass (Tasks 1–5) — July 2026
 - ✅ Task 1: Fantasy Intelligence panel redesign (readability, confidence indicator, blowout risk)
 - ✅ Task 2: Player detail sheet (color-coded bars, average line, better labels, game-log link placement)
@@ -33,34 +43,33 @@ Tracks planned improvements, in-progress work, and longer-horizon ideas.
 - ✅ Game-log sessionStorage cache (45-min TTL)
 - ✅ Back-to-back detection
 - ✅ Blowout risk heuristic
+- ✅ Skeleton loading states (play-by-play, player-detail, pregame panel)
 
 ---
 
 ## Near-Term
 
-### UX
-- 📋 **Lineup slot visualization**: show the 8 roster slots with assigned players instead of just a count (improves C/VC assignment discoverability)
-- 📋 **Collapsible filter section**: save vertical space in the player list when filters are at defaults
-- 📋 **Player compare sheet**: tap "Compare" to get a side-by-side stats card without navigating away
-- 📋 **Haptic feedback** on player add/remove (mobile devices that support it)
-
 ### Intelligence
-- 📋 **Home/away split indicators** on player rows (players often perform differently at home vs. away)
-- 📋 **Opponent defensive rating context** in pre-game intel (DraftKings-style matchup rating)
-- 📋 **Injury report timestamp**: show when ESPN last updated the injury report, not just when the app refreshed
+- 📋 **Home/away split indicators** on player rows in the pre-game panel — players often perform differently at home vs. away; show a trend or badge if the split is significant
+- 📋 **Opponent defensive rating context** in pre-game intel — DraftKings-style matchup rating (requires a heuristic since no paid source is used)
+- 📋 **Injury report timestamp** — show when ESPN last updated the injury report, not just when the app refreshed
+
+### UX
+- 📋 **Player compare sheet** — tap "Compare" to get a side-by-side stats card without navigating away
+- 📋 **Haptic feedback** on player add/remove (mobile devices that support it)
+- 📋 **Export lineup to clipboard** — copy in DraftKings CSV format for easy pasting
 
 ### Performance
-- 📋 **Game detail cache** (`fetchGameById`): short TTL (30s live, 5min scheduled/final) to reduce refetches on component remount
-- 📋 **Background refresh**: stale-while-revalidate pattern for the league overview so the page loads instantly from cache then updates silently
+- 📋 **Background refresh** — stale-while-revalidate pattern for the league overview so the page loads instantly from cache then updates silently
 
 ---
 
 ## Medium-Term Ideas
 
-- 💡 **Roster differentiation score**: given N saved lineups, suggest players that are lightly-owned across your own lineups to maximize lineup diversity
-- 💡 **DFS contest type presets**: one-and-done showdown vs. GPP vs. cash game changes the right credit allocation strategy
-- 💡 **Notification for confirmed starters**: push/badge when a previously Questionable player is confirmed ~1hr before tip-off
-- 💡 **Multi-game slate support**: the optimizer currently locks to one game; slate view (multiple games) for DraftKings-style contests
+- 💡 **Roster differentiation score** — given N saved lineups, suggest lightly-owned players to maximize lineup diversity
+- 💡 **DFS contest type presets** — one-and-done showdown vs. GPP vs. cash game changes the right credit allocation strategy
+- 💡 **Notification for confirmed starters** — push/badge when a previously Questionable player is confirmed ~1hr before tip-off
+- 💡 **Multi-game slate support** — optimizer currently locks to one game; slate view (multiple games) for DraftKings-style contests
 
 ---
 
@@ -68,3 +77,4 @@ Tracks planned improvements, in-progress work, and longer-horizon ideas.
 - Live odds integration (requires a paid data source)
 - Season-long fantasy (this tool is DFS / showdown focused)
 - Social / sharing features
+- New leagues beyond current six (NBL, NZ NBL, FIBA, NBA, WNBA, NBA Summer)

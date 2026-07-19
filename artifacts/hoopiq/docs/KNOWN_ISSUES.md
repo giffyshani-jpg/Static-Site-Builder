@@ -60,6 +60,15 @@ Tracked limitations, design decisions that look like bugs, and confirmed defects
 
 ---
 
+### K-007 · `isStale` indicator only fires for live games
+
+**File:** `src/hooks/use-live-game.ts`, `src/pages/box-score.tsx`
+**Severity:** Minor / informational
+**Description:** The "Reconnecting…" amber indicator only shows when `isLive` is true (game in progress). Network failures during pregame polling (every 60s) are tracked internally but not surfaced in the UI because the pregame panel has its own refresh timestamp.
+**Status:** Intentional. The pregame case is low-urgency (60s cadence); surfacing a reconnect banner would be distracting.
+
+---
+
 ## Resolved
 
 | ID | Description | Fixed in |
