@@ -131,6 +131,7 @@ export default function FantasyOptimizer() {
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [avoidUsedPlayers, setAvoidUsedPlayers] = useState(false);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   // ── Live update state ──────────────────────────────────────────────────
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -160,6 +161,14 @@ export default function FantasyOptimizer() {
     setPositionFilter(prefs.position);
     setFavoritesOnly(prefs.favoritesOnly);
     setAvoidUsedPlayers(prefs.avoidUsedPlayers ?? false);
+    // Auto-open filter panel when saved preferences have non-default filters active
+    // so users don't wonder why the list is already filtered.
+    const hasActive =
+      prefs.teamFilter !== "all" ||
+      prefs.position !== "all" ||
+      prefs.favoritesOnly ||
+      (prefs.avoidUsedPlayers ?? false);
+    if (hasActive) setFiltersOpen(true);
     setPrefsLoaded(true);
   }, []);
 
@@ -1456,7 +1465,8 @@ export default function FantasyOptimizer() {
             className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
 
-          <div className="flex items-center gap-3">
+          {/* Sort row + Filters toggle */}
+          <div className="flex items-center gap-2">
             <span className="text-xs font-medium text-muted-foreground shrink-0">Sort by</span>
             <select
               value={sortKey}
@@ -1477,94 +1487,133 @@ export default function FantasyOptimizer() {
             >
               {sortDir === "desc" ? "↓" : "↑"}
             </button>
-          </div>
-
-          {/* Team filter */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {(["all", "away", "home"] as TeamFilter[]).map((value) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setTeamFilter(value)}
-                className={`text-xs font-semibold rounded-full px-3 py-1 border transition-colors ${
-                  teamFilter === value
-                    ? "bg-primary text-primary-foreground border-primary-border"
-                    : "border-border text-muted-foreground hover:bg-muted/40"
-                }`}
-              >
-                {value === "all"
-                  ? "All Teams"
-                  : value === "away"
-                    ? game.awayTeam.abbreviation
-                    : game.homeTeam.abbreviation}
-              </button>
-            ))}
-          </div>
-
-          {/* Position filter */}
-          {availablePositions.length > 0 && (
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <button
-                type="button"
-                onClick={() => setPositionFilter("all")}
-                className={`text-xs font-semibold rounded-full px-3 py-1 border transition-colors ${
-                  positionFilter === "all"
-                    ? "bg-primary text-primary-foreground border-primary-border"
-                    : "border-border text-muted-foreground hover:bg-muted/40"
-                }`}
-              >
-                All Positions
-              </button>
-              {availablePositions.map((position) => (
+            {/* Filters toggle button — badge shows count when filters are active and panel is hidden */}
+            {(() => {
+              const activeCount =
+                (teamFilter !== "all" ? 1 : 0) +
+                (positionFilter !== "all" ? 1 : 0) +
+                (favoritesOnly ? 1 : 0) +
+                (avoidUsedPlayers ? 1 : 0);
+              return (
                 <button
-                  key={position}
                   type="button"
-                  onClick={() => setPositionFilter(position)}
-                  className={`text-xs font-semibold rounded-full px-3 py-1 border transition-colors ${
-                    positionFilter === position
-                      ? "bg-primary text-primary-foreground border-primary-border"
-                      : "border-border text-muted-foreground hover:bg-muted/40"
+                  aria-label={filtersOpen ? "Hide filters" : "Show filters"}
+                  aria-expanded={filtersOpen}
+                  onClick={() => setFiltersOpen((v) => !v)}
+                  className={`h-9 shrink-0 rounded-md border px-2.5 flex items-center gap-1.5 text-xs font-semibold transition-colors ${
+                    filtersOpen
+                      ? "border-primary bg-primary/10 text-primary"
+                      : activeCount > 0
+                        ? "border-primary/50 bg-primary/5 text-primary"
+                        : "border-input text-muted-foreground hover:bg-muted/40"
                   }`}
                 >
-                  {position}
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+                  </svg>
+                  Filters
+                  {!filtersOpen && activeCount > 0 && (
+                    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary text-primary-foreground text-[9px] font-black leading-none">
+                      {activeCount}
+                    </span>
+                  )}
+                  <span className="text-[10px] opacity-50 ml-0.5">{filtersOpen ? "▲" : "▼"}</span>
                 </button>
-              ))}
+              );
+            })()}
+          </div>
+
+          {/* Collapsible filter panel */}
+          {filtersOpen && (
+            <div className="flex flex-col gap-3 pt-1 border-t border-border/50">
+              {/* Team filter */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {(["all", "away", "home"] as TeamFilter[]).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setTeamFilter(value)}
+                    className={`text-xs font-semibold rounded-full px-3 py-1 border transition-colors ${
+                      teamFilter === value
+                        ? "bg-primary text-primary-foreground border-primary-border"
+                        : "border-border text-muted-foreground hover:bg-muted/40"
+                    }`}
+                  >
+                    {value === "all"
+                      ? "All Teams"
+                      : value === "away"
+                        ? game.awayTeam.abbreviation
+                        : game.homeTeam.abbreviation}
+                  </button>
+                ))}
+              </div>
+
+              {/* Position filter */}
+              {availablePositions.length > 0 && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setPositionFilter("all")}
+                    className={`text-xs font-semibold rounded-full px-3 py-1 border transition-colors ${
+                      positionFilter === "all"
+                        ? "bg-primary text-primary-foreground border-primary-border"
+                        : "border-border text-muted-foreground hover:bg-muted/40"
+                    }`}
+                  >
+                    All Positions
+                  </button>
+                  {availablePositions.map((position) => (
+                    <button
+                      key={position}
+                      type="button"
+                      onClick={() => setPositionFilter(position)}
+                      className={`text-xs font-semibold rounded-full px-3 py-1 border transition-colors ${
+                        positionFilter === position
+                          ? "bg-primary text-primary-foreground border-primary-border"
+                          : "border-border text-muted-foreground hover:bg-muted/40"
+                      }`}
+                    >
+                      {position}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Favorites only toggle */}
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs font-medium text-muted-foreground shrink-0">Favorites only</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={favoritesOnly}
+                  onClick={() => setFavoritesOnly((v) => !v)}
+                  className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${favoritesOnly ? "bg-primary" : "bg-muted"}`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${favoritesOnly ? "translate-x-4" : "translate-x-0"}`}
+                  />
+                </button>
+              </div>
+
+              {/* Avoid players already used in previous saved teams */}
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Avoid players used in other lineups
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={avoidUsedPlayers}
+                  onClick={() => setAvoidUsedPlayers((v) => !v)}
+                  className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${avoidUsedPlayers ? "bg-primary" : "bg-muted"}`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${avoidUsedPlayers ? "translate-x-4" : "translate-x-0"}`}
+                  />
+                </button>
+              </div>
             </div>
           )}
-
-          {/* Favorites only toggle */}
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-xs font-medium text-muted-foreground shrink-0">Favorites only</span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={favoritesOnly}
-              onClick={() => setFavoritesOnly((v) => !v)}
-              className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${favoritesOnly ? "bg-primary" : "bg-muted"}`}
-            >
-              <span
-                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${favoritesOnly ? "translate-x-4" : "translate-x-0"}`}
-              />
-            </button>
-          </div>
-
-          {/* Avoid players already used in previous saved teams */}
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-xs font-medium text-muted-foreground">
-              Avoid players used in other lineups
-            </span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={avoidUsedPlayers}
-              onClick={() => setAvoidUsedPlayers((v) => !v)}
-              className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${avoidUsedPlayers ? "bg-primary" : "bg-muted"}`}
-            >
-              <span
-                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${avoidUsedPlayers ? "translate-x-4" : "translate-x-0"}`}
-              />
-            </button>
-          </div>
         </div>
 
         {/* ── Player list ───────────────────────────────────────────────── */}
