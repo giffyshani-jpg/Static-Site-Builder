@@ -53,7 +53,10 @@ export function useLiveGame(
 
     let cancelled = false;
     const id = setInterval(async () => {
-      const data = await fetchGameById(gameId, league);
+      // noCache: true — live polls must always hit the network, not a stale
+      // cache entry. The result is still written to the cache so a component
+      // remount right after a tick sees fresh data.
+      const data = await fetchGameById(gameId, league, { noCache: true });
       if (cancelled) return;
       const loaded = (data as Game | undefined) ?? undefined;
       if (loaded) {
@@ -78,7 +81,9 @@ export function useLiveGame(
 
     let cancelled = false;
     const id = setInterval(async () => {
-      const data = await fetchGameById(gameId, league);
+      // noCache: true — pregame polls should reflect the latest injury/lineup
+      // updates from ESPN, not a 2-min-old cached entry.
+      const data = await fetchGameById(gameId, league, { noCache: true });
       if (cancelled) return;
       const loaded = (data as Game | undefined) ?? undefined;
       if (loaded) {

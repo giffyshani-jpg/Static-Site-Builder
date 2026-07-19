@@ -262,17 +262,77 @@ export async function fetchLeagueOverview(league, options) {
   return promise;
 }
 
+// ── Game detail cache ─────────────────────────────────────────────────────────
+//
+// fetchGameById is called on every component mount (box score, optimizer,
+// pregame panel) AND on every poll tick for live games. The cache prevents
+// redundant fetches on remount; the poll loop bypasses it via { noCache: true }
+// so live state is never stale.
+//
+// TTLs by game status:
+//   in_progress → 30 s   (changes fast; remounts should feel fresh)
+//   final       → 5 min  (score is fixed; back-navigation is instant)
+//   scheduled   → 2 min  (lineups/injuries change infrequently pre-game)
+//
+// Cache is memory-only (no sessionStorage) — game payloads can be large and
+// the primary win is within a single navigation session.
+
+const GAME_TTL_MS = {
+  in_progress: 30_000,
+  final: 5 * 60_000,
+  scheduled: 2 * 60_000,
+};
+const GAME_DEFAULT_TTL_MS = 30_000;
+
+const GAME_MEM_CACHE = new Map(); // `${gameId}:${league}` → { data, fetchedAt }
+const GAME_IN_FLIGHT = new Map(); // same key → Promise
+
+function getGameFromCache(key) {
+  const entry = GAME_MEM_CACHE.get(key);
+  if (!entry) return undefined;
+  const ttl = GAME_TTL_MS[entry.data?.status] ?? GAME_DEFAULT_TTL_MS;
+  return Date.now() - entry.fetchedAt < ttl ? entry.data : undefined;
+}
+
+function setGameCache(key, data) {
+  GAME_MEM_CACHE.set(key, { data, fetchedAt: Date.now() });
+}
+
 /**
  * Full game detail (box score) by game ID.
+ *
  * @param {string} gameId
  * @param {string} league
+ * @param {{ noCache?: boolean }} [options]
+ *   noCache – pass true in poll loops so live state is always fetched fresh.
+ *   The result is still written to the cache regardless, so a remount right
+ *   after a poll will hit a warm cache entry.
  */
-export async function fetchGameById(gameId, league) {
-  return safeCall(
+export async function fetchGameById(gameId, league, { noCache = false } = {}) {
+  const key = `${gameId}:${league}`;
+
+  if (!noCache) {
+    const cached = getGameFromCache(key);
+    if (cached !== undefined) return cached;
+    if (GAME_IN_FLIGHT.has(key)) return GAME_IN_FLIGHT.get(key);
+  }
+
+  const promise = safeCall(
     () => getProvider(league).getGame(gameId),
     undefined,
     `fetchGameById(${gameId}, ${league})`
-  );
+  ).then((result) => {
+    GAME_IN_FLIGHT.delete(key);
+    // Always populate cache (even for noCache calls) so remounts see fresh data.
+    if (result !== undefined) setGameCache(key, result);
+    return result;
+  }).catch((err) => {
+    GAME_IN_FLIGHT.delete(key);
+    throw err;
+  });
+
+  if (!noCache) GAME_IN_FLIGHT.set(key, promise);
+  return promise;
 }
 
 /**

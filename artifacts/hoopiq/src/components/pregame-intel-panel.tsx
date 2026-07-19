@@ -92,7 +92,17 @@ function formatTipoff(iso: string): string {
 //   • Recommendation badge right-aligned (only when not OUT)
 //   • OUT players dimmed (opacity-60) and shown without projections
 
-function PlayerIntelRow({ player }: { player: PregamePlayerIntel }) {
+function PlayerIntelRow({
+  player,
+  isHome,
+  opponentAbbr,
+}: {
+  player: PregamePlayerIntel;
+  /** True when this player's team is the home team tonight. */
+  isHome: boolean;
+  /** Abbreviation of the opponent (e.g. "LAL", "BOS"). */
+  opponentAbbr: string;
+}) {
   const confidence = deriveConfidence(player);
   const isOut = player.status === "Out";
 
@@ -119,7 +129,12 @@ function PlayerIntelRow({ player }: { player: PregamePlayerIntel }) {
             </span>
           )}
         </div>
-        <p className="text-[11px] text-muted-foreground mt-0.5">{player.position || "—"}</p>
+        <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1.5">
+          <span>{player.position || "—"}</span>
+          <span className="text-[10px] font-medium text-muted-foreground/60">
+            {isHome ? `vs ${opponentAbbr}` : `@ ${opponentAbbr}`}
+          </span>
+        </p>
 
         {/* Metrics row — omit for OUT players (projections are meaningless) */}
         {!isOut && (
@@ -351,7 +366,14 @@ export function PregameIntelPanel({
                   No rotation data available yet.
                 </p>
               ) : (
-                intel.away!.map((p) => <PlayerIntelRow key={p.playerId} player={p} />)
+                intel.away!.map((p) => (
+                  <PlayerIntelRow
+                    key={p.playerId}
+                    player={p}
+                    isHome={false}
+                    opponentAbbr={game.homeTeam.abbreviation}
+                  />
+                ))
               )}
             </div>
           </div>
@@ -368,7 +390,14 @@ export function PregameIntelPanel({
                   No rotation data available yet.
                 </p>
               ) : (
-                intel.home!.map((p) => <PlayerIntelRow key={p.playerId} player={p} />)
+                intel.home!.map((p) => (
+                  <PlayerIntelRow
+                    key={p.playerId}
+                    player={p}
+                    isHome={true}
+                    opponentAbbr={game.awayTeam.abbreviation}
+                  />
+                ))
               )}
             </div>
           </div>
