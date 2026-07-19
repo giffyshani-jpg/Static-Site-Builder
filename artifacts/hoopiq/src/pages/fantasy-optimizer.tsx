@@ -47,6 +47,7 @@ import {
 import type { OcrProgress } from "../lib/ocr-import";
 import { minutesValue, playerSortTier } from "../lib/player-status";
 import { computeSavedLineupLiveStats } from "../lib/lineup-live";
+import { AiFantasyCoach } from "../components/ai-fantasy-coach";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -780,12 +781,25 @@ export default function FantasyOptimizer() {
     <MobileLayout showBack title="Fantasy Optimizer">
       <div className="flex flex-col">
 
+        {/* ── AI Fantasy Coach ──────────────────────────────────────────── */}
+        {players.length > 0 && (
+          <AiFantasyCoach
+            game={game}
+            league={league}
+            players={players}
+            credits={credits}
+          />
+        )}
+
         {/* ── Game context + budget ─────────────────────────────────────── */}
         <div className="p-4 border-b border-border bg-card flex flex-col gap-4">
           <div className="flex items-center gap-2 flex-wrap">
             {game.status === "in_progress" && (
-              <span className="flex items-center gap-1 text-[10px] font-bold uppercase text-red-400">
-                <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+              <span className="flex items-center gap-1 text-[10px] font-bold uppercase text-primary">
+                <span className="relative flex h-2 w-2 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
+                </span>
                 Live
               </span>
             )}

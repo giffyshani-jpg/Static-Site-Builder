@@ -5,6 +5,7 @@
 //   Next 15 events  : /api/v1/json/3/eventsnextleague.php?id={leagueId}
 //   Past 15 events  : /api/v1/json/3/eventspastleague.php?id={leagueId}
 //   Season events   : /api/v1/json/3/eventsseason.php?id={leagueId}&s={season}
+//   Single event    : /api/v1/json/3/lookupevent.php?id={eventId}
 //
 // Known league IDs used by this project:
 //   NZ NBL          : 5066   (New Zealand National Basketball League)
@@ -13,53 +14,48 @@
 // Use it only for schedule (upcoming/past) when no better source is available.
 
 const TSDB_BASE = "https://www.thesportsdb.com/api/v1/json/3";
+const FETCH_TIMEOUT_MS = 9_000;
 
 async function fetchTsdb(path) {
   const url = `${TSDB_BASE}/${path}`;
-  const res = await fetch(url, {
-    headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json" },
-  });
-  if (!res.ok) throw new Error(`TheSportsDB ${res.status}: ${url}`);
-  return res.json();
+  const controller = new AbortController();
+  const timerId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json" },
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(`TheSportsDB ${res.status}: ${url}`);
+    return res.json();
+  } finally {
+    clearTimeout(timerId);
+  }
 }
 
-/**
- * Map a TheSportsDB event to our normalized Game shape.
- * TSDB events have no live score, so status is always "scheduled" or "final"
- * based on whether strStatus contains "Match Finished" or similar.
- *
- * @param {object} ev   raw TSDB event
- * @param {string} leagueKey
- */
 /**
  * Derive a short 3-letter abbreviation from a team name.
  * Prefers the first 3 characters of the first word (city/region) to match
  * the NBA-style convention (AUC for Auckland, WEL for Wellington, etc.).
- * Falls back to full-name slice for single-word names.
  */
 function makeAbbreviation(teamName) {
   if (!teamName) return "UNK";
   const words = teamName.trim().split(/\s+/).filter(Boolean);
-  // Single word (e.g. "Hawks"): first 3 chars.
   if (words.length === 1) return words[0].slice(0, 3).toUpperCase();
-  // Multi-word: first 3 chars of the first word (city/region). This gives
-  // AUC (Auckland), WEL (Wellington), CAN (Canterbury), OTA (Otago), etc.
   return words[0].slice(0, 3).toUpperCase();
 }
 
 /**
  * Determine whether a TSDB event is finished.
- * Handles: "Match Finished", "FT", "AET" (after extra time), "AP" (after penalties),
- * and "Match Abandoned" (treat as final — scores exist, game won't continue).
+ * Handles: "Match Finished", "FT", "AET", "AP", "PSO", "Abandoned".
  */
 function isEventFinished(strStatus) {
   const s = (strStatus ?? "").toLowerCase().trim();
   return (
     s.includes("match finished") ||
     s === "ft" ||
-    s === "aet" ||         // after extra time
-    s === "ap" ||          // after penalties
-    s === "pso" ||         // penalty shoot-out completed
+    s === "aet" ||
+    s === "ap" ||
+    s === "pso" ||
     s.includes("abandoned")
   );
 }
@@ -149,7 +145,7 @@ export async function getLeagueOverviewFromTsdb(leagueId, leagueKey) {
     );
 
   return {
-    live: [],                   // TSDB has no live scores
+    live: [],
     upcoming,
     lastPlayed: past[0] ?? null,
   };
@@ -157,13 +153,6 @@ export async function getLeagueOverviewFromTsdb(leagueId, leagueKey) {
 
 /**
  * Fetch a single game by its TheSportsDB event ID.
- * Uses the `lookupevent.php` endpoint which returns a single event with scores
- * and status. Confirmed response shape (July 2026 NZ NBL test):
- *   { idEvent, strEvent, strStatus:"FT", intHomeScore:"92", intAwayScore:"79",
- *     strTimestamp:"2026-07-16T07:00:00", strSport:"Basketball" }
- *
- * Returns null if the event is not found or the request fails.
- *
  * @param {string | number} eventId  TSDB numeric event ID (e.g. "2467092")
  * @param {string} leagueKey         our internal key, e.g. "nznbl"
  * @returns {Promise<object|null>}   normalized Game or null
@@ -174,29 +163,61 @@ export async function getGameFromTsdb(eventId, leagueKey) {
     const events = data.events ?? [];
     if (events.length === 0) return null;
     const ev = events[0];
-    // Reject if the sport doesn't look like basketball (guard against TSDB ID
-    // collisions with other sports databases).
     const sport = (ev.strSport ?? "").toLowerCase();
     if (sport && !sport.includes("basketball")) return null;
     return normalizeEvent(ev, leagueKey);
   } catch (err) {
-    console.warn(`[thesportsdb] getGameFromTsdb(${eventId}) failed:`, err.message);
     return null;
   }
 }
 
 /**
  * Fetches today's events for a league from TSDB.
- * Since TSDB has no live scores, returns scheduled events for today only.
+ * Compares against the viewer's LOCAL date string (not UTC) since TSDB
+ * `dateEvent` is in the event's local timezone. Falls back to UTC if
+ * the local comparison yields nothing.
+ *
  * @param {string | number} leagueId
  * @param {string} leagueKey
  */
 export async function getTodayGamesFromTsdb(leagueId, leagueKey) {
   try {
     const data = await fetchTsdb(`eventsnextleague.php?id=${leagueId}`);
-    const today = new Date().toISOString().slice(0, 10);
-    return (data.events ?? [])
-      .filter((e) => (e.dateEvent ?? "") === today)
+    const events = data.events ?? [];
+
+    // Use the viewer's local date (YYYY-MM-DD) as the primary match string.
+    const localDate = new Date().toLocaleDateString("sv-SE"); // sv-SE = ISO date format
+    const utcDate = new Date().toISOString().slice(0, 10);
+
+    const matchDate = (e) =>
+      (e.dateEvent ?? "") === localDate || (e.dateEvent ?? "") === utcDate;
+
+    return events.filter(matchDate).map((e) => normalizeEvent(e, leagueKey));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Fetch events by date string (YYYY-MM-DD) using TSDB's next/past events.
+ * TSDB free tier has no per-date query, so we fetch the next/past 15 and filter.
+ *
+ * @param {string | number} leagueId
+ * @param {string} leagueKey
+ * @param {string} dateStr  YYYY-MM-DD (not YYYYMMDD)
+ */
+export async function getGamesByDateFromTsdb(leagueId, leagueKey, dateStr) {
+  try {
+    const [nextData, pastData] = await Promise.all([
+      fetchTsdb(`eventsnextleague.php?id=${leagueId}`).catch(() => ({ events: null })),
+      fetchTsdb(`eventspastleague.php?id=${leagueId}`).catch(() => ({ events: null })),
+    ]);
+    const all = [
+      ...(nextData.events ?? []),
+      ...(pastData.events ?? []),
+    ];
+    return all
+      .filter((e) => (e.dateEvent ?? "") === dateStr)
       .map((e) => normalizeEvent(e, leagueKey));
   } catch {
     return [];

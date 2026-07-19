@@ -1,12 +1,12 @@
 # HoopIQ — Project Context
 
 ## Vision
-HoopIQ is a mobile-first basketball hub for serious fantasy basketball players and fans. It aggregates live scores, box scores, player stats, and pre-game intelligence from multiple leagues in one clean interface. The core differentiator is the Fantasy Optimizer — a lineup-building tool with credit budgeting, captain/VC roles, auto-pick, OCR import, and pre-game intelligence powered by real ESPN data.
+HoopIQ is a mobile-first basketball hub for serious fantasy basketball players and fans. It aggregates live scores, box scores, player stats, and pre-game intelligence from multiple leagues in one clean interface. The core differentiator is the Fantasy Optimizer — a lineup-building tool with credit budgeting, captain/VC roles, auto-pick, OCR import, pre-game intelligence, and now an **AI Fantasy Coach** with 12 named picks powered by real ESPN data.
 
 ## Architecture
 
 ### Stack
-- **Frontend**: React + Vite, TypeScript, Tailwind CSS, shadcn/ui components
+- **Frontend**: React + Vite, TypeScript, Tailwind CSS v4, shadcn/ui components
 - **Routing**: Wouter (lightweight SPA routing)
 - **State**: React useState/useEffect (no Redux), TanStack Query not used — raw fetch in hooks
 - **Persistence**: Browser localStorage only (no backend, no database)
@@ -15,24 +15,28 @@ HoopIQ is a mobile-first basketball hub for serious fantasy basketball players a
 ### Data Sources
 | League | Source | Status |
 |--------|--------|--------|
-| NBA | ESPN Site API (`nba`) | Off-season; returns Oct 2026 |
+| NBA | ESPN Site API (`nba`) + NBA CDN fallback | Off-season; returns Oct 2026 |
 | WNBA | ESPN Site API (`wnba`) | Active ✅ |
 | NBA Summer League | ESPN NBA scoreboard filtered for type-3 events | Active during July ✅ |
 | NBL (Australia) | ESPN Site API (`nbl`) | Off-season; returns Oct 2026 |
-| NZ NBL | TheSportsDB ID 5066 + ESPN fallback | Active May–Aug ✅ |
+| NZ NBL | TheSportsDB ID 5066 primary + ESPN fallback | Active May–Aug ✅ |
 | FIBA | ESPN Site API (`fiba`) | Varies by tournament |
 
 ### Key Files
 | Path | Purpose |
 |------|---------|
 | `src/api.js` | Adapter layer — UI imports only from here |
-| `src/providers/espn.js` | All ESPN API logic (shared by NBA, WNBA, NBL, FIBA, Summer) |
+| `src/providers/espn.js` | All ESPN API logic (retry + timeout; shared by NBA, WNBA, NBL, FIBA, Summer) |
 | `src/providers/thesportsdb.js` | TheSportsDB integration (NZ NBL) |
 | `src/providers/nznbl.js` | NZ NBL: TheSportsDB primary, ESPN fallback |
-| `src/providers/nba-summer.js` | NBA Summer League: ESPN NBA with type-3 filter |
-| `src/pages/fantasy-optimizer.tsx` | The Fantasy Optimizer UI (1500+ lines) |
+| `src/providers/nbadotcom.js` | NBA CDN fallback provider |
+| `src/providers/nba-summer.js` | NBA Summer League: ESPN NBA with type-3 filter + CDN fallback |
+| `src/lib/ai-coach.ts` | AI Fantasy Coach — pure pick computation (12 picks) |
+| `src/components/ai-fantasy-coach.tsx` | AI Coach UI panel (used in Fantasy Optimizer) |
+| `src/pages/fantasy-optimizer.tsx` | The Fantasy Optimizer UI (1900+ lines) |
 | `src/pages/home.tsx` | Home page with premium league cards + Other Basketball group |
 | `src/lib/pregame-intel.ts` | Pre-game intelligence heuristics |
+| `src/lib/game-log-metrics.ts` | Per-player game-log metric computation |
 | `src/lib/lineup-storage.ts` | Saved lineups, lineup validation |
 | `src/lib/fantasy-storage.ts` | Budget + credits localStorage persistence |
 | `src/lib/stats.ts` | Fantasy points formula |
@@ -43,7 +47,7 @@ HoopIQ is a mobile-first basketball hub for serious fantasy basketball players a
 /                    → Home
 /:league             → League Games (e.g. /nba, /wnba)
 /:league/game/:id    → Box Score
-/:league/game/:id/optimizer → Fantasy Optimizer
+/:league/game/:id/optimizer → Fantasy Optimizer (contains AI Coach)
 /:league/game/:id/plays     → Play-by-Play
 /:league/game/:id/compare   → Player Comparison
 /:league/player/:playerId   → Player Detail
@@ -60,9 +64,9 @@ HoopIQ is a mobile-first basketball hub for serious fantasy basketball players a
 
 ## Coding Standards
 - TypeScript for all new files; JS preserved for providers/api to avoid migration churn
+- TypeScript tsconfig has `allowJs: true`, `noImplicitAny: false` — required for JS provider imports from TSX
 - No backend — all data from public ESPN/TheSportsDB APIs via browser fetch (CORS open)
 - `safeCall()` wraps every provider call so one failure never crashes the app
-- Use `req.log` / `logger` for server code, never `console.log` — but hoopiq is frontend-only
 - Components in `src/components/`, pages in `src/pages/`, lib utilities in `src/lib/`
 - Provider contract: every provider must export `getTodayGames`, `getGamesByDate`, `getGame`, `getPlayerGameLog`, `getTeamSchedule`, `getLeagueOverview`
 
@@ -73,3 +77,9 @@ HoopIQ is a mobile-first basketball hub for serious fantasy basketball players a
 - `src/lib/lineup-storage.ts` — lineup validation rules (8 players, max 4 per team, C/VC)
 - Provider contract in `src/api.js` — UI never imports from providers directly
 - The `safeCall()` wrapper — it must stay around every provider invocation
+
+## CSS Theme
+- Background: HSL 222 20% 7% (deep navy)
+- Primary: HSL 24 95% 53% (basketball orange)
+- Card: HSL 222 18% 10%
+- `skeleton-shimmer` and `live-dot` custom utility classes in index.css

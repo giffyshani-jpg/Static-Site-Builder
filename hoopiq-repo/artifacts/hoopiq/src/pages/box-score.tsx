@@ -227,51 +227,110 @@ export default function BoxScore() {
     <MobileLayout showBack title={`${game.awayTeam.abbreviation} vs ${game.homeTeam.abbreviation}`}>
 
       {/* Scoreboard Header */}
-      <div className="bg-card border-b border-border p-6 sm:p-8 flex flex-col items-center">
+      <div className="bg-gradient-to-b from-card to-card/80 border-b border-border px-6 py-6 sm:px-8 sm:py-8 flex flex-col items-center gap-4">
         {/* Status / period row */}
-        <div className="flex items-center gap-2 mb-4">
-          {isLive && (
-            <span className="flex items-center gap-1 text-[10px] font-bold uppercase text-red-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
-              Live
-            </span>
+        <div className="flex items-center gap-2">
+          {isLive ? (
+            <>
+              <span className="relative flex h-2.5 w-2.5 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-primary" />
+              </span>
+              <span className="text-[11px] font-black uppercase tracking-widest text-primary">
+                {game.period}{game.clock ? ` · ${game.clock}` : ""}
+              </span>
+            </>
+          ) : (
+            <div className="text-xs font-bold tracking-widest text-muted-foreground uppercase px-2.5 py-1 rounded-full bg-muted/40">
+              {game.status === "scheduled" ? (game.startTime || "Scheduled") : (game.period || "Final")}
+              {game.status !== "scheduled" && game.clock && ` · ${game.clock}`}
+            </div>
           )}
-          <div className="text-xs sm:text-sm font-semibold tracking-wider text-muted-foreground uppercase">
-            {game.status === "scheduled" ? game.startTime : game.period}
-            {game.clock && ` - ${game.clock}`}
-          </div>
         </div>
 
-        <div className="flex justify-between items-center w-full max-w-[280px] sm:max-w-sm">
-          <div className="flex flex-col items-center gap-2">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-secondary flex items-center justify-center text-lg sm:text-xl font-bold text-secondary-foreground border-2 border-border shadow-sm">
-              {game.awayTeam.abbreviation}
-            </div>
-            <span className="font-bold text-2xl sm:text-3xl tabular-nums tracking-tight">
-              {game.awayTeam.score ?? "-"}
-            </span>
-          </div>
+        {/* Teams + scores */}
+        {(() => {
+          const awayScore = game.awayTeam.score;
+          const homeScore = game.homeTeam.score;
+          const isFinal = game.status === "final";
+          const awayWon = isFinal && (awayScore ?? 0) > (homeScore ?? 0);
+          const homeWon = isFinal && (homeScore ?? 0) > (awayScore ?? 0);
+          const awayLeading = isLive && (awayScore ?? 0) > (homeScore ?? 0);
+          const homeLeading = isLive && (homeScore ?? 0) > (awayScore ?? 0);
+          const hasScores = awayScore !== null && homeScore !== null;
+          return (
+            <div className="flex items-center justify-center gap-4 sm:gap-6 w-full max-w-xs">
+              {/* Away team */}
+              <div className="flex flex-col items-center gap-2 flex-1">
+                <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center text-base sm:text-lg font-black shrink-0 border-2 transition-colors ${
+                  awayWon ? "bg-foreground text-background border-foreground" :
+                  awayLeading ? "bg-primary/15 text-primary border-primary/40" :
+                  "bg-muted/50 text-foreground/80 border-border"
+                }`}>
+                  {game.awayTeam.abbreviation}
+                </div>
+                <div className="text-center">
+                  {hasScores ? (
+                    <span className={`text-3xl sm:text-4xl font-black tabular-nums tracking-tight ${
+                      awayWon || awayLeading ? "text-foreground" : "text-foreground/60"
+                    }`}>
+                      {awayScore}
+                    </span>
+                  ) : (
+                    <span className="text-xs font-medium text-muted-foreground/60">–</span>
+                  )}
+                </div>
+                <span className="text-[11px] text-muted-foreground/60 text-center truncate max-w-[80px]">
+                  {game.awayTeam.abbreviation} · Away
+                </span>
+              </div>
 
-          <div className="text-muted-foreground font-medium text-sm">AT</div>
+              {/* Center divider */}
+              <div className="flex flex-col items-center gap-1 shrink-0">
+                {hasScores && (
+                  <div className="text-2xl font-black text-border">:</div>
+                )}
+                {!hasScores && (
+                  <div className="text-xs font-bold text-muted-foreground/40 uppercase tracking-wider">vs</div>
+                )}
+              </div>
 
-          <div className="flex flex-col items-center gap-2">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-secondary flex items-center justify-center text-lg sm:text-xl font-bold text-secondary-foreground border-2 border-border shadow-sm">
-              {game.homeTeam.abbreviation}
+              {/* Home team */}
+              <div className="flex flex-col items-center gap-2 flex-1">
+                <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center text-base sm:text-lg font-black shrink-0 border-2 transition-colors ${
+                  homeWon ? "bg-foreground text-background border-foreground" :
+                  homeLeading ? "bg-primary/15 text-primary border-primary/40" :
+                  "bg-muted/50 text-foreground/80 border-border"
+                }`}>
+                  {game.homeTeam.abbreviation}
+                </div>
+                <div className="text-center">
+                  {hasScores ? (
+                    <span className={`text-3xl sm:text-4xl font-black tabular-nums tracking-tight ${
+                      homeWon || homeLeading ? "text-foreground" : "text-foreground/60"
+                    }`}>
+                      {homeScore}
+                    </span>
+                  ) : (
+                    <span className="text-xs font-medium text-muted-foreground/60">–</span>
+                  )}
+                </div>
+                <span className="text-[11px] text-muted-foreground/60 text-center truncate max-w-[80px]">
+                  {game.homeTeam.abbreviation} · Home
+                </span>
+              </div>
             </div>
-            <span className="font-bold text-2xl sm:text-3xl tabular-nums tracking-tight">
-              {game.homeTeam.score ?? "-"}
-            </span>
-          </div>
-        </div>
+          );
+        })()}
 
         {/* Last updated / stale indicator */}
         {isStale && isLive ? (
-          <p className="mt-2 text-[10px] text-amber-400 flex items-center gap-1">
+          <p className="text-[10px] text-amber-400 flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
             Reconnecting…
           </p>
         ) : lastUpdated ? (
-          <p className="mt-2 text-[10px] text-muted-foreground">
+          <p className="text-[10px] text-muted-foreground/60">
             {isLive ? "Auto-updating · " : ""}Updated {formatTime(lastUpdated)}
           </p>
         ) : null}

@@ -124,11 +124,34 @@ function GameGrid({ games }: { games: Game[] }) {
 function Skeleton() {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-      {[0, 1].map((i) => (
+      {[0, 1, 2].map((i) => (
         <div
           key={i}
-          className="h-24 rounded-xl bg-muted/40 animate-pulse"
-        />
+          className="rounded-xl border border-border/30 overflow-hidden"
+          style={{ animationDelay: `${i * 100}ms` }}
+        >
+          <div className="flex items-center justify-between px-3.5 pt-3 pb-2">
+            <div className="h-3 w-16 rounded-full skeleton-shimmer" />
+            <div className="h-3 w-3 rounded-full skeleton-shimmer" />
+          </div>
+          <div className="flex flex-col gap-2 px-3.5 pb-3.5">
+            <div className="flex items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg skeleton-shimmer shrink-0" />
+                <div className="h-3.5 w-24 rounded-full skeleton-shimmer" />
+              </div>
+              <div className="h-4 w-6 rounded-full skeleton-shimmer" />
+            </div>
+            <div className="h-px bg-border/30" />
+            <div className="flex items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg skeleton-shimmer shrink-0" />
+                <div className="h-3.5 w-20 rounded-full skeleton-shimmer" />
+              </div>
+              <div className="h-4 w-6 rounded-full skeleton-shimmer" />
+            </div>
+          </div>
+        </div>
       ))}
     </div>
   );

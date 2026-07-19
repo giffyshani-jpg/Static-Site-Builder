@@ -23,6 +23,11 @@
 - **Credits not game-scoped**: Player credits are stored globally by player ID. If a player appears in multiple games, their credit carries over (by design, but can surprise users).
 - **No auto-assign C/VC in Auto-Pick**: The Auto-Pick button fills the 8 slots but doesn't assign Captain or Vice Captain. Users must do that manually.
 
+### AI Fantasy Coach
+- **Scheduled games — no highFpts**: The `usePregameIntel` hook doesn't expose single-game peak FPTS, so the Highest Ceiling 🚀 pick is hidden for pre-game optimizer sessions.
+- **Live games — no game-log trends**: For live/final games, the coach uses only current-game FPTS (no historical avgFpts, consistency, or minutesTrend). Picks like Trending Up/Down, Safest, and Sleeper may be hidden.
+- **Minimum data threshold**: Requires ≥3 active players with scoreable data. Coach section is hidden entirely for NZ NBL games (no player data from TheSportsDB).
+
 ## Limitations
 
 ### ESPN API
@@ -33,11 +38,12 @@
 ### General
 - **No push notifications**: App is a static SPA; no service worker or background sync.
 - **No user accounts**: All data is localStorage. Clearing browser storage loses saved lineups.
-- **Mobile-first only**: Desktop experience is functional but not optimized.
+- **Mobile-first only**: Desktop experience is functional but not fully optimized.
 - **EuroLeague/EuroCup blocked**: No public API available. ESPN returns 400.
 
 ## Future Improvements
-- Consider caching ESPN responses in sessionStorage to reduce redundant requests
-- Add a "no lineup yet" empty state with step-by-step onboarding in the optimizer
-- Improve OCR matching for international player names
+- Player Intelligence page (Task 2): home/away splits, win/loss splits, Boom%/Bust%
+- Provider Health Monitor (Task 3): per-provider status tracking + automatic prioritization
+- Optimizer: Lock/Exclude/Core player features (Task 4)
 - Investigate TheSportsDB paid tier for NZ NBL live scores
+- Consider caching ESPN responses in sessionStorage to reduce redundant requests

@@ -8,6 +8,7 @@
 // Endpoints:
 //   Live scoreboard : https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_00.json
 //   Box score       : https://cdn.nba.com/static/json/liveData/boxscore/boxscore_{gameId}.json
+//   Schedule        : https://cdn.nba.com/static/json/staticData/scheduleLeagueV2_1.json
 //
 // Summer League identification:
 //   Summer League games appear in the regular NBA scoreboard (league 00) and
@@ -24,11 +25,17 @@ const NBA_HEADERS = {
   Referer: "https://www.nba.com/",
 };
 
-async function fetchNba(path) {
+async function fetchNba(path, { timeoutMs = 9_000 } = {}) {
   const url = `${NBA_CDN_BASE}/${path}`;
-  const res = await fetch(url, { headers: NBA_HEADERS });
-  if (!res.ok) throw new Error(`NBA CDN ${res.status}: ${url}`);
-  return res.json();
+  const controller = new AbortController();
+  const timerId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { headers: NBA_HEADERS, signal: controller.signal });
+    if (!res.ok) throw new Error(`NBA CDN ${res.status}: ${url}`);
+    return res.json();
+  } finally {
+    clearTimeout(timerId);
+  }
 }
 
 /** Map NBA.com gameStatus (1/2/3) to our normalized status string. */
@@ -40,8 +47,6 @@ function mapStatus(gameStatus) {
 
 /**
  * Normalize a single game object from the NBA CDN scoreboard shape.
- * @param {object} g    raw game from scoreboard.games[]
- * @param {string} leagueKey  e.g. "nba-summer" or "nba"
  */
 function normalizeGame(g, leagueKey) {
   const home = g.homeTeam ?? {};
@@ -96,8 +101,6 @@ function normalizeGame(g, leagueKey) {
 
 /**
  * Returns true if a game from the NBA CDN scoreboard is a Summer League game.
- * Summer League games have gameLabel "Summer League" and/or gameId starting
- * with "001" (vs "002x" for regular season).
  */
 function isSummerLeague(g) {
   if ((g.gameLabel ?? "").toLowerCase().includes("summer")) return true;
@@ -122,26 +125,21 @@ async function fetchTodayGames(leagueKey, filter) {
  * Fetch the full-season schedule JSON and return games matching a filter.
  * The schedule file is ~2MB but is cached by the CDN and typically only
  * needed once per session for the forward-scan on the league page.
- *
- * @param {string} leagueKey
- * @param {(g: object) => boolean} [filter]
  */
 async function fetchScheduleGames(leagueKey, filter) {
-  // scheduleLeagueV2_1.json = current season schedule for league "00" (NBA)
-  const data = await fetchNba("staticData/scheduleLeagueV2_1.json");
+  const data = await fetchNba("staticData/scheduleLeagueV2_1.json", { timeoutMs: 15_000 });
   const gameDates = data.leagueSchedule?.gameDates ?? [];
   const all = [];
   for (const gd of gameDates) {
     for (const g of gd.games ?? []) {
       if (!filter || filter(g)) {
-        // Schedule shape differs slightly from scoreboard shape
         all.push({
           gameId: g.gameId,
           homeTeam: g.homeTeam,
           awayTeam: g.awayTeam,
           gameTimeUTC: g.gameDateTimeUTC ?? null,
           gameLabel: g.gameLabel ?? "",
-          gameStatus: 1, // all future schedule entries are "scheduled"
+          gameStatus: 1,
           gameClock: "",
           period: 0,
         });
@@ -163,7 +161,6 @@ export async function getSummerLeagueTodayGames() {
 
 /**
  * Today's regular-season NBA games (excludes Summer League).
- * Not currently used by the app but exported for completeness.
  * @returns {Promise<object[]>}
  */
 export async function getNbaTodayGames() {
@@ -172,12 +169,9 @@ export async function getNbaTodayGames() {
 
 /**
  * Timezone-safe Summer League overview: { live, upcoming, lastPlayed }.
- * Primary source for the NBA Summer League provider.
- *
  * @param {{ scan?: boolean }} [options]
  */
 export async function getSummerLeagueOverview({ scan = true } = {}) {
-  // 1. Fetch today's live scoreboard — authoritative for LIVE games.
   const todayGames = await fetchTodayGames("nba-summer", isSummerLeague);
 
   const live = todayGames.filter((g) => g.status === "in_progress");
@@ -196,7 +190,6 @@ export async function getSummerLeagueOverview({ scan = true } = {}) {
     };
   }
 
-  // 2. No live/upcoming today — optionally scan the full season schedule.
   if (scan) {
     try {
       const allScheduled = await fetchScheduleGames("nba-summer", isSummerLeague);
@@ -214,9 +207,46 @@ export async function getSummerLeagueOverview({ scan = true } = {}) {
         lastPlayed: todayFinal[0] ?? null,
       };
     } catch (schedErr) {
-      console.warn("[nba-cdncom] schedule scan failed:", schedErr.message);
+      // Schedule scan failed silently — return what we have
     }
   }
 
   return { live, upcoming: todayScheduled, lastPlayed: todayFinal[0] ?? null };
+}
+
+/**
+ * Timezone-safe NBA overview (regular season, no Summer League).
+ * Used as fallback when ESPN NBA scoreboard is unavailable.
+ * @param {{ scan?: boolean }} [options]
+ */
+export async function getNbaOverview({ scan = true } = {}) {
+  const todayGames = await fetchTodayGames("nba", (g) => !isSummerLeague(g));
+
+  const live = todayGames.filter((g) => g.status === "in_progress");
+  const upcoming = todayGames
+    .filter((g) => g.status === "scheduled")
+    .sort((a, b) => new Date(a.startTimeIso ?? 0).getTime() - new Date(b.startTimeIso ?? 0).getTime());
+  const final = todayGames
+    .filter((g) => g.status === "final")
+    .sort((a, b) => new Date(b.startTimeIso ?? 0).getTime() - new Date(a.startTimeIso ?? 0).getTime());
+
+  if (live.length > 0 || upcoming.length > 0) {
+    return { live, upcoming, lastPlayed: final[0] ?? null };
+  }
+
+  // Optional schedule scan for next upcoming NBA game
+  if (scan) {
+    try {
+      const allScheduled = await fetchScheduleGames("nba", (g) => !isSummerLeague(g));
+      const now = Date.now();
+      const future = allScheduled
+        .filter((g) => new Date(g.startTimeIso ?? 0).getTime() > now)
+        .sort((a, b) => new Date(a.startTimeIso ?? 0).getTime() - new Date(b.startTimeIso ?? 0).getTime());
+      return { live: [], upcoming: future, lastPlayed: final[0] ?? null };
+    } catch {
+      // Schedule scan failed silently
+    }
+  }
+
+  return { live, upcoming, lastPlayed: final[0] ?? null };
 }
