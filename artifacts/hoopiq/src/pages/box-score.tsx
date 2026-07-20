@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "wouter";
 import { MobileLayout } from "../components/layout";
 import { CompareBar } from "../components/compare-bar";
-import { StarButton } from "../components/star-button";
 import { PlayerStatusBadges } from "../components/player-status-badges";
 import { RecentFormBadge } from "../components/recent-form-badge";
 import { PlayerDetailSheet } from "../components/player-detail-sheet";
@@ -434,8 +433,7 @@ export default function BoxScore() {
         <table className="w-full text-sm text-left whitespace-nowrap">
           <thead className="text-xs text-muted-foreground bg-muted/40 uppercase sticky top-0">
             <tr>
-              <th className="px-2 py-3 font-medium text-center w-10">★</th>
-              <th className="px-4 py-3 font-medium sticky left-10 bg-muted/95 z-10 shadow-[1px_0_0_0_var(--color-border)] min-w-[140px]">Player</th>
+              <th className="px-4 py-3 font-medium sticky left-0 bg-muted/95 z-10 shadow-[1px_0_0_0_var(--color-border)] min-w-[140px]">Player</th>
               <SortTh label="MIN" sortKey="min"  activeSortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
               <SortTh label="FPTS" sortKey="fpts" activeSortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
               <th className="px-3 py-3 font-medium text-right">L5</th>
@@ -451,7 +449,7 @@ export default function BoxScore() {
           <tbody className="divide-y divide-border">
             {visiblePlayers.length === 0 ? (
               <tr>
-                <td colSpan={12} className="px-4 py-10 text-center text-sm">
+                <td colSpan={11} className="px-4 py-10 text-center text-sm">
                   {rosterPlayers.length === 0 ? (
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <p>
@@ -477,18 +475,10 @@ export default function BoxScore() {
                 const fpts = calculateFantasyPoints(player.stats);
                 const isComparing = comparison.isSelected(player.id);
                 const disableAdd = comparison.isFull && !isComparing;
-                const isFavorite = favorites.isFavorite(player.id);
                 const form = recentForm.getForm(player.id);
                 return (
                   <tr key={player.id} className="hover:bg-muted/20 transition-colors">
-                    <td className="px-2 py-3 text-center">
-                      <StarButton
-                        active={isFavorite}
-                        onToggle={() => favorites.toggleFavorite(player.id)}
-                        label={isFavorite ? `Unfavorite ${player.name}` : `Favorite ${player.name}`}
-                      />
-                    </td>
-                    <td className="px-4 py-3 sticky left-10 bg-card z-10 shadow-[1px_0_0_0_var(--color-border)]">
+                    <td className="px-4 py-3 sticky left-0 bg-card z-10 shadow-[1px_0_0_0_var(--color-border)]">
                       <div className="flex flex-col gap-0.5">
                         <div className="flex items-center gap-1.5">
                           <button
