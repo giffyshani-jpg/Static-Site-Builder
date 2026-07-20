@@ -14,6 +14,14 @@ Tracks planned improvements, in-progress work, and longer-horizon ideas.
 
 ## Completed
 
+### UI & Intelligence Polish — July 20, 2026
+- ✅ Box score: removed ★ favorite star column (saves horizontal space, scroll is clean); sticky player col at `left-0`
+- ✅ Fantasy Optimizer: re-injected AI Fantasy Coach above budget section; live indicator unified to primary orange
+- ✅ AI Coach explanations: all 12 picks now carry specific numbers, data source, and actionable framing
+- ✅ PickCard: wider cards (w-52/w-56), accent-matched label colours per pick kind, `line-clamp-4` explanation
+- ✅ Box score "Favorites only" toggle: improved label + hints for empty state
+- ✅ Merge resolution: brought remote (reliability+features) and local (AI coach+premium UI) back into sync
+
 ### Reliability & Intelligence Pass — July 2026
 - ✅ Game detail cache (30s live · 2min scheduled · 5min final TTL) — eliminates remount refetches
 - ✅ Poll-loop noCache opt-out — live/pregame polls always hit network; cache stays warm for remounts

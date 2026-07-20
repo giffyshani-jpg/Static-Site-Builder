@@ -183,14 +183,15 @@ export function computeCoachPicks(players: CoachPlayerInput[]): CoachPick[] {
         return rB - rA;
       })[0];
     if (valuePick && !used(valuePick.id)) {
-      const ratio = ((bestScore(valuePick) ?? 0) / valuePick.credits).toFixed(2);
+      const valueScore = bestScore(valuePick) ?? 0;
+      const ratio = (valueScore / valuePick.credits).toFixed(2);
       picks.push({
         kind: "best_value",
         ...COACH_PICK_META.best_value,
         playerId: valuePick.id,
         playerName: valuePick.name,
         teamAbbr: valuePick.teamAbbr,
-        explanation: `${ratio} FPTS per credit — best efficiency ratio in this pool.`,
+        explanation: `${valuePick.credits} cr → ${valueScore.toFixed(1)} FPTS avg (${scoreLabel(valuePick)}) = ${ratio} pts/cr — best efficiency in this pool.`,
       });
     }
   }
@@ -207,16 +208,18 @@ export function computeCoachPicks(players: CoachPlayerInput[]): CoachPick[] {
       )
       .sort((a, b) => (bestScore(b) ?? 0) - (bestScore(a) ?? 0))[0];
     if (sleeper) {
+      const sleeperScore = bestScore(sleeper)!;
+      const creditGap = Math.round(medianCredits - sleeper.credits);
       const parts: string[] = [];
-      if (sleeper.minutesTrend === "up") parts.push("minutes trending up");
-      if (sleeper.formTrend === "Hot") parts.push("on a hot streak");
+      if (sleeper.minutesTrend === "up") parts.push("minutes trending ↑");
+      if (sleeper.formTrend === "Hot") parts.push("hot streak 🔥");
       picks.push({
         kind: "sleeper",
         ...COACH_PICK_META.sleeper,
         playerId: sleeper.id,
         playerName: sleeper.name,
         teamAbbr: sleeper.teamAbbr,
-        explanation: `Low credit cost, ${parts.join(" and ")} — a potential tournament differentiator.`,
+        explanation: `${sleeperScore.toFixed(1)} FPTS avg (${scoreLabel(sleeper)}) at ${sleeper.credits} cr${creditGap > 0 ? ` — ${creditGap} under pool median` : ""}. ${parts.join(", ")}. Strong tournament differentiator.`,
       });
     }
   }
@@ -269,13 +272,14 @@ export function computeCoachPicks(players: CoachPlayerInput[]): CoachPick[] {
     .filter((p) => p.minutesTrend === "down" && p.formTrend === "Cold")
     .sort((a, b) => (bestScore(b) ?? 0) - (bestScore(a) ?? 0))[0];
   if (trendingDown) {
+    const downScore = bestScore(trendingDown)!;
     picks.push({
       kind: "trending_down",
       ...COACH_PICK_META.trending_down,
       playerId: trendingDown.id,
       playerName: trendingDown.name,
       teamAbbr: trendingDown.teamAbbr,
-      explanation: "Minutes falling and FPTS declining over recent games — production may continue to slide.",
+      explanation: `${downScore.toFixed(1)} FPTS avg (${scoreLabel(trendingDown)}) but minutes falling and form cold — production likely to slide further.`,
     });
   }
 
@@ -291,13 +295,14 @@ export function computeCoachPicks(players: CoachPlayerInput[]): CoachPick[] {
     .sort((a, b) => (bestScore(b) ?? 0) - (bestScore(a) ?? 0))[0];
   if (safest) {
     const score = bestScore(safest)!;
+    const safeStatusNote = safest.status === "Confirmed Starter" ? "confirmed starter" : "expected starter";
     picks.push({
       kind: "safest",
       ...COACH_PICK_META.safest,
       playerId: safest.id,
       playerName: safest.name,
       teamAbbr: safest.teamAbbr,
-      explanation: `${score.toFixed(1)} FPTS avg with high consistency — reliable floor, low variance.`,
+      explanation: `${score.toFixed(1)} FPTS avg (${scoreLabel(safest)}), ${safeStatusNote}, no B2B, consistent performer — lowest variance pick in this pool.`,
     });
   }
 

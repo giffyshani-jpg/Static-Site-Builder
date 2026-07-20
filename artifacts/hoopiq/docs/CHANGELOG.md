@@ -4,6 +4,33 @@ All notable changes to HoopIQ are documented here in reverse-chronological order
 
 ---
 
+## [Unreleased] — UI & Intelligence Polish (July 20, 2026)
+
+### Task 1 — Box Score Polish
+- Removed ★ Favorite Star column from box-score table (import, `<th>`, `<td>`, `isFavorite` variable). Saved ~40 px of horizontal space; horizontal scroll is now clean.
+- Sticky player-name column repositioned to `left-0` (was `left-10`, which assumed the now-removed star column).
+- `colSpan` on the empty-state row corrected from 12 → 11.
+- "Favorites only" toggle label gains a subtitle: "Tap a player name to favorite them" — replaces the removed star as the discoverability hint.
+- When `favoritesOnly` is active but no players match, dedicated empty state: "No favorited players in this view. Tap any player's name to open their profile and add them to favorites."
+
+### Task 2 — UI Polish (Fantasy Optimizer)
+- Re-injected `AiFantasyCoach` above the budget section in `fantasy-optimizer.tsx` (had been dropped during merge resolution).
+- Live indicator in optimizer header changed from `text-red-400 bg-red-400` to basketball orange (`text-primary bg-primary`) with double-ring ping animation, consistent with all other live indicators in the app.
+
+### Task 4 — Fantasy Intelligence Polish
+- **AI Coach explanations** — all 12 picks now carry precise, data-grounded text:
+  - *Best Value*: shows `{credits} cr → {FPTS} avg ({data source}) = {ratio} pts/cr`.
+  - *Sleeper*: shows FPTS avg + credit cost + how far below pool median + triggering signal.
+  - *Trending Down*: shows actual FPTS avg before the warning, not just generic text.
+  - *Safest*: includes starter-status wording ("confirmed starter" vs "expected starter") and explicit B2B-clear note.
+- **PickCard redesign**: cards widened to `w-52 sm:w-56`; label color now matches the left-border accent per pick kind (orange for Captain, amber for VC, emerald for Value, etc.); explanation text upgraded to `text-[11.5px]` with `line-clamp-4`; team abbreviation rendered in small-caps for scannability.
+
+### Merge resolution
+- Resolved 20 add/add conflicts from diverged local (`feat/AI-fantasy-coach`) and remote (`origin/main`).
+- Remote providers, tsconfig, and docs merged in as canonical; local UI pages (box-score, home, layout, game-card, index.css) retained for premium dark-theme redesign.
+
+---
+
 ## [Unreleased] — Reliability & Intelligence Pass (July 2026)
 
 ### Fix — broken imports

@@ -63,32 +63,49 @@ function PickCard({ pick }: { pick: CoachPick }) {
     injury_impact:   "border-l-rose-500 bg-rose-500/5",
   };
 
+  // Label color matches the left-border accent
+  const KIND_LABEL_COLOR: Partial<Record<string, string>> = {
+    best_captain:    "text-primary",
+    best_vc:         "text-amber-500",
+    best_value:      "text-emerald-500",
+    sleeper:         "text-sky-400",
+    fade:            "text-rose-500",
+    trending_up:     "text-emerald-400",
+    trending_down:   "text-rose-400",
+    safest:          "text-blue-400",
+    highest_ceiling: "text-purple-400",
+    home_advantage:  "text-orange-400",
+    back_to_back:    "text-amber-400",
+    injury_impact:   "text-rose-400",
+  };
+
   const accent = KIND_ACCENT[pick.kind] ?? "border-l-border bg-muted/10";
+  const labelColor = KIND_LABEL_COLOR[pick.kind] ?? "text-muted-foreground";
 
   return (
     <div
-      className={`flex-shrink-0 w-48 sm:w-52 rounded-xl border border-border border-l-4 ${accent} p-3 flex flex-col gap-1.5`}
+      className={`flex-shrink-0 w-52 sm:w-56 rounded-xl border border-border border-l-4 ${accent} p-3.5 flex flex-col gap-2`}
     >
       {/* Header: emoji + label */}
       <div className="flex items-center gap-1.5">
-        <span className="text-base leading-none" aria-hidden>{pick.emoji}</span>
-        <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+        <span className="text-base leading-none shrink-0" aria-hidden>{pick.emoji}</span>
+        <span className={`text-[10px] font-black uppercase tracking-wider leading-tight ${labelColor}`}>
           {pick.label}
         </span>
       </div>
 
       {/* Player name + team */}
       <div>
-        <p className="text-sm font-bold text-foreground leading-tight line-clamp-1">
+        <p className="text-sm font-bold text-foreground leading-snug line-clamp-1">
           {pick.playerName}
         </p>
-        <p className="text-[10px] text-muted-foreground/70 font-medium mt-0.5">
+        <p className="text-[11px] text-muted-foreground/60 font-semibold mt-0.5 uppercase tracking-wide">
           {pick.teamAbbr}
         </p>
       </div>
 
-      {/* Explanation */}
-      <p className="text-[11px] text-muted-foreground leading-relaxed mt-0.5 line-clamp-3">
+      {/* Explanation — wider card fits text better */}
+      <p className="text-[11.5px] text-muted-foreground/90 leading-relaxed line-clamp-4 border-t border-border/40 pt-2">
         {pick.explanation}
       </p>
     </div>

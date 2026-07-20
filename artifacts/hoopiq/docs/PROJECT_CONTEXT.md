@@ -1,6 +1,7 @@
 # HoopIQ — Project Context
 
 > One-page orientation for any agent starting fresh on this codebase.
+> **Updated**: July 20, 2026 — box-score star removed; AI Coach in optimizer; all 12 pick explanations carry real numbers.
 
 ---
 

@@ -399,11 +399,15 @@ export default function BoxScore() {
 
       {/* Favorites filter */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-background">
-        <span className="text-xs font-medium text-muted-foreground">Favorites only</span>
+        <div>
+          <span className="text-xs font-medium text-muted-foreground">Favorites only</span>
+          <p className="text-[10px] text-muted-foreground/50 mt-0.5">Tap a player name to favorite them</p>
+        </div>
         <button
           type="button"
           role="switch"
           aria-checked={favoritesOnly}
+          aria-label="Show only favorited players"
           onClick={() => setFavoritesOnly((v) => !v)}
           className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${favoritesOnly ? "bg-primary" : "bg-muted"}`}
         >
@@ -452,7 +456,7 @@ export default function BoxScore() {
                 <td colSpan={11} className="px-4 py-10 text-center text-sm">
                   {rosterPlayers.length === 0 ? (
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                      <p>
+                      <p className="text-sm">
                         {league === "nznbl"
                           ? "NZ NBL box scores come from TheSportsDB, which doesn't include player stats in the free tier."
                           : league === "fiba"
@@ -465,8 +469,13 @@ export default function BoxScore() {
                         </p>
                       )}
                     </div>
+                  ) : favoritesOnly ? (
+                    <div className="flex flex-col items-center gap-1.5 text-muted-foreground py-4">
+                      <p className="text-sm">No favorited players in this view.</p>
+                      <p className="text-xs text-muted-foreground/60">Tap any player's name to open their profile and add them to favorites.</p>
+                    </div>
                   ) : (
-                    <span className="text-muted-foreground">No players match the current filters.</span>
+                    <span className="text-sm text-muted-foreground">No players match the current filters.</span>
                   )}
                 </td>
               </tr>

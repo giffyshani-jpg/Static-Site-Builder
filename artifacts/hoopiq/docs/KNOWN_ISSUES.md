@@ -6,6 +6,17 @@ Tracked limitations, design decisions that look like bugs, and confirmed defects
 
 ## Open
 
+### K-004 · GitHub push via `gitPush` callback broken
+
+**Severity:** Medium (blocks automated push; manual workaround available)  
+**Description:** The `gitPush({ branch: "main" })` CodeExecution callback returns `CLI_ERROR: UNKNOWN_NOT_GIT`. The sandbox environment doesn't share the workspace `.git` context. Direct `git push origin main` in shell also fails — no credential helper is configured for `https://github.com`.  
+**Workaround:** Use the **Replit Git pane** (Git icon in left sidebar) to push. As of July 20, 2026 there are 3 unpushed commits ahead of `origin/main`.  
+**Do not try:** `gitPush({ force: true })` — same failure mode.
+
+---
+
+## Open (pre-existing)
+
 ### K-001 · `computeTrend` is single-sample
 
 **File:** `src/components/recent-form-badge.tsx`

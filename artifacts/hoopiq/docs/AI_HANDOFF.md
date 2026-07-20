@@ -2,6 +2,21 @@
 
 Context for any agent picking up work on this codebase.
 
+> **Last session**: July 20, 2026 — UI & Intelligence Polish (Tasks 1, 2, 4 complete).
+> **Git state**: 3 commits ahead of `origin/main`. Push via Replit Git pane (gitPush callback is broken in this workspace — no GitHub OAuth credential helper configured).
+
+### What changed this session
+
+| Change | File(s) |
+|--------|---------|
+| ★ star column removed from box-score table | `pages/box-score.tsx` |
+| AI Fantasy Coach re-injected into optimizer | `pages/fantasy-optimizer.tsx` |
+| Live indicator unified to primary orange | `pages/fantasy-optimizer.tsx` |
+| AI Coach explanations: specific numbers + data source | `lib/ai-coach.ts` |
+| PickCard: wider, accent-matched label colours, better text | `components/ai-fantasy-coach.tsx` |
+| Favorites empty state + label hint | `pages/box-score.tsx` |
+| Merge: 20 add/add conflicts resolved (remote providers + remote features kept) | all |
+
 ---
 
 ## What this app does
