@@ -1,43 +1,78 @@
 # HoopIQ — Known Issues
 
-## Active Bugs
+Tracked limitations, design decisions that look like bugs, and confirmed defects. Update this file whenever a new issue is discovered or an existing one is resolved.
 
-### NZ NBL
-- **No live scores**: TheSportsDB free tier doesn't provide live scores. Status is always "scheduled" or "final". Live dot never appears for NZ NBL games.
-- **No player box scores**: TheSportsDB free tier returns no player-level stats. Game pages for NZ NBL show team scores only, no roster.
-- **`getGamesByDate` falls back to ESPN** which returns 400 for "nznbl" slug — any per-date query returns empty for NZ NBL.
+---
 
-### FIBA
-- **Intermittent ESPN availability**: FIBA events only appear when ESPN has active FIBA coverage. Between tournaments, the league may show empty.
-- **No play-by-play**: ESPN FIBA scoreboard doesn't always include play-by-play data.
+## Open
 
-### NBA Summer League
-- **Season-specific**: Runs only in July. Provider is kept live year-round but auto-hides on home page when no games are returned.
-- **getGame uses NBA summary**: Summer League game detail fetches via `espn.getGame("nba", gameId)` — works because game IDs are shared, but relies on the NBA summary endpoint which may have different data availability.
+### K-001 · `computeTrend` is single-sample
 
-### NBA / NBL
-- **Off-season gaps**: Forward scan in `getLeagueOverview` searches up to 180 days. If ESPN doesn't populate a future slate that far out, "Next game" may show incorrectly or not at all.
+**File:** `src/components/recent-form-badge.tsx`
+**Severity:** Minor / cosmetic
+**Description:** `computeTrend` compares only the last entry to the prior rolling average. One exceptional game can flip the indicator to "Hot" or "Cold" even if the overall trend is flat.
+**Status:** Intentional simplification. Do not "fix" without user sign-off — the metric is clearly labeled as a recent trend, not a season-long trend.
 
-### Fantasy Optimizer
-- **OCR accuracy**: Tesseract.js name matching is fuzzy (Levenshtein distance). Short or hyphenated names sometimes fail to match. Users can manually correct via the dropdown.
-- **Credits not game-scoped**: Player credits are stored globally by player ID. If a player appears in multiple games, their credit carries over (by design, but can surprise users).
-- **No auto-assign C/VC in Auto-Pick**: The Auto-Pick button fills the 8 slots but doesn't assign Captain or Vice Captain. Users must do that manually.
+---
 
-## Limitations
+### K-002 · App Avg is useless for new users
 
-### ESPN API
-- Undocumented, unofficial endpoint — shapes can change without notice.
-- No API key required; CORS open. Can be rate-limited under heavy load.
-- Pre-game injury report only available for ESPN-backed leagues (NBA, WNBA, NBL, FIBA, Summer).
+**File:** `src/lib/player-history.ts` + `src/components/player-detail-sheet.tsx`
+**Severity:** UX / informational
+**Description:** "App Avg" accumulates from box scores the user has opened in the app. A brand-new user sees "—" everywhere because nothing is tracked yet.
+**Status:** By design. We show "—" rather than a misleading zero or a fabricated average. The UI explains the mechanic inline.
 
-### General
-- **No push notifications**: App is a static SPA; no service worker or background sync.
-- **No user accounts**: All data is localStorage. Clearing browser storage loses saved lineups.
-- **Mobile-first only**: Desktop experience is functional but not optimized.
-- **EuroLeague/EuroCup blocked**: No public API available. ESPN returns 400.
+---
 
-## Future Improvements
-- Consider caching ESPN responses in sessionStorage to reduce redundant requests
-- Add a "no lineup yet" empty state with step-by-step onboarding in the optimizer
-- Improve OCR matching for international player names
-- Investigate TheSportsDB paid tier for NZ NBL live scores
+### K-003 · Optimizer has no position-limit enforcement
+
+**File:** `src/pages/fantasy-optimizer.tsx`, `src/lib/optimizer.ts`
+**Severity:** Minor (primary use case is position-agnostic)
+**Description:** The lineup validator does not enforce per-position maximums (e.g. max 2 guards). DraftKings showdown format has no position limits, which is the primary use case, so this is correct. Classic-format contests would need an additional check.
+**Status:** Won't fix for showdown format. Document if a classic-format mode is ever added.
+
+---
+
+### K-004 · NZ NBL live scores sometimes lag
+
+**File:** `src/providers/nznbl.js` (TheSportsDB provider)
+**Severity:** Minor
+**Description:** TheSportsDB (ID 5066) updates live scores less frequently than ESPN. Box scores may show 2–5 min stale data during live NZ NBL games.
+**Status:** Accepted limitation of the free data source. No fix without a paid real-time feed.
+
+---
+
+### K-005 · Injury status not always populated before tip-off
+
+**File:** `src/lib/espn.js`
+**Severity:** Minor
+**Description:** Injury status in the Pre-Game Intelligence panel comes from `athlete.injuries[]` in ESPN's roster endpoint. This array is not always populated until ~1 hr before tip-off (sometimes not until warm-ups). Players may show as "Expected" when they are actually listed as Questionable.
+**Status:** ESPN API limitation. No workaround. Panel header shows the last-refresh timestamp so users can judge data freshness.
+
+---
+
+### K-006 · OCR lineup import accuracy varies
+
+**File:** `src/pages/fantasy-optimizer.tsx` (OCR import section)
+**Severity:** Minor
+**Description:** OCR import from DraftKings screenshots works well for standard fonts and clean screenshots but can misread names with special characters or clipped cards.
+**Status:** Known limitation of client-side OCR. Users are prompted to review the import before confirming.
+
+---
+
+### K-007 · `isStale` indicator only fires for live games
+
+**File:** `src/hooks/use-live-game.ts`, `src/pages/box-score.tsx`
+**Severity:** Minor / informational
+**Description:** The "Reconnecting…" amber indicator only shows when `isLive` is true (game in progress). Network failures during pregame polling (every 60s) are tracked internally but not surfaced in the UI because the pregame panel has its own refresh timestamp.
+**Status:** Intentional. The pregame case is low-urgency (60s cadence); surfacing a reconnect banner would be distracting.
+
+---
+
+## Resolved
+
+| ID | Description | Fixed in |
+|----|-------------|----------|
+| R-001 | Scheduled game stats showed misleading all-zero "This Game" grid | Polish pass Tasks 1–5 (July 2026) |
+| R-002 | OUT players showed projected minutes + recommendation badge | Polish pass Tasks 1–5 (July 2026) |
+| R-003 | `Link` and `useRef` removed from imports that actively use them | Import fix commit (July 2026) |

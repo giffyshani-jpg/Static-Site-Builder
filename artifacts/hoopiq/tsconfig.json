@@ -4,14 +4,14 @@
   "exclude": ["node_modules", "build", "dist", "**/*.test.ts"],
   "compilerOptions": {
     "noEmit": true,
+    "allowJs": true,
+    "checkJs": false,
     "jsx": "preserve",
     "lib": ["esnext", "dom", "dom.iterable"],
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
     "moduleResolution": "bundler",
     "types": ["node", "vite/client"],
-    "allowJs": true,
-    "noImplicitAny": false,
     "paths": {
       "@/*": ["./src/*"]
     }

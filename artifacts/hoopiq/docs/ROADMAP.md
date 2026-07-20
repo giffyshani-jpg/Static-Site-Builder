@@ -1,79 +1,80 @@
-# HoopIQ — Roadmap
+# HoopIQ Roadmap
 
-## ✅ Completed Features
+Tracks planned improvements, in-progress work, and longer-horizon ideas.
 
-### Home Page
-- [x] NBA + WNBA premium full-width gradient cards
-- [x] "Other Basketball" collapsible group card (NBL, NZ NBL, FIBA, Summer League)
-- [x] NBA Summer League auto-hides when no live/upcoming games
-- [x] League status chips (live count, upcoming count, last played date)
-- [x] Inline game expand (show live/upcoming games without navigating)
-- [x] Show last-played game on home card
+---
 
-### League Pages
-- [x] Date navigator (yesterday / today / tomorrow)
-- [x] Game cards with live scores, team abbreviations, status
-- [x] Router-aware back navigation
+## Status Legend
+- ✅ Done
+- 🔄 In progress / partial
+- 📋 Planned
+- 💡 Idea / exploratory
 
-### Box Score / Game Pages
-- [x] Full box score with player stats (PTS, REB, AST, STL, BLK, TO, MIN)
-- [x] Live polling every 5s for in-progress games
-- [x] Play-by-play view
-- [x] Player comparison (up to 2 players side-by-side)
-- [x] Player detail sheet (game log chart, recent form)
-- [x] Pre-Game Intelligence panel for scheduled games (starter status, projected minutes, injury report, back-to-back, blowout risk, recommendation badge)
+---
 
-### Fantasy Optimizer
-- [x] 8-player lineup builder (max 4 from same team)
-- [x] Captain (2×) and Vice Captain (1.5×) role assignment
-- [x] Budget management (DraftKings/FanDuel/Custom presets)
-- [x] Per-player credit inputs with auto-suggest (proportional to FPTS)
-- [x] Saved lineups (name, save, load, rename, delete)
-- [x] Live FPTS tracking on saved lineups
-- [x] Lineup validation with inline error messages
-- [x] Text export of valid lineup
-- [x] OCR import from screenshot (Tesseract.js)
-- [x] Sort by FPTS / PTS / REB / AST / Credits / MIN
-- [x] Filter by team, position, favorites, avoid-used-players
-- [x] Player status badges (OUT, GTD, Questionable, Starter, DNP)
-- [x] Recent form badge on player rows
+## Completed
 
-### Data Providers
-- [x] ESPN NBA, WNBA, NBL, FIBA providers
-- [x] ESPN NBA Summer League (type-3 filter + CDN fallback)
-- [x] TheSportsDB NZ NBL provider
-- [x] Timezone-safe league overview (ESPN default + UTC yesterday/tomorrow)
-- [x] Forward/backward scan for off-season leagues
-- [x] Graceful safeCall fallback on all providers
+### Reliability & Intelligence Pass — July 2026
+- ✅ Game detail cache (30s live · 2min scheduled · 5min final TTL) — eliminates remount refetches
+- ✅ Poll-loop noCache opt-out — live/pregame polls always hit network; cache stays warm for remounts
+- ✅ Opponent matchup context in pre-game panel (vs / @ abbreviation on each player row)
+- ✅ Collapsible filter panel in Optimizer — sort always visible, secondary filters behind Filters toggle with active-count badge
+- ✅ Lineup slot visualization — 8 named roster rows (C → VC → FLEX → empty) with role hints
+- ✅ Live update error handling — `isStale` / Reconnecting… amber indicator after 2 consecutive poll misses
+- ✅ Pregame panel skeleton loading state
+- ✅ Broken import fixes (Link in box-score, useRef in optimizer)
 
-## ✅ Completed (this session)
+### Polish Pass (Tasks 1–5) — July 2026
+- ✅ Task 1: Fantasy Intelligence panel redesign (readability, confidence indicator, blowout risk)
+- ✅ Task 2: Player detail sheet (color-coded bars, average line, better labels, game-log link placement)
+- ✅ Task 3: Optimizer polish (credit bar, unified checklist, larger C/VC buttons)
+- ✅ Task 4: League overview cache (2-min TTL + in-flight deduplication)
+- ✅ Task 5: Bug fixes (scheduled game zeros, OUT player projections, form heading)
 
-### Task 1: Fantasy Intelligence UX — [eb8ee2b]
-- [x] Auto-Pick Best lineup button (fill with top FPTS players within budget)
-- [x] Clear Lineup button (visible only when lineup has players)
-- [x] Lineup progress bar above the summary grid
-- [x] Remaining credits goes amber when < 20% of budget left
-- [x] "Avoid used" toggle label shortened
-- [x] Onboarding empty state in player list
+### Earlier (pre-polish)
+- ✅ Auto-Pick Best greedy algorithm
+- ✅ Suggest Credits proportional allocation
+- ✅ Progress bar on lineup fill
+- ✅ Saved lineups with live stats
+- ✅ OCR lineup import from screenshots
+- ✅ Compare bar for side-by-side player comparison
+- ✅ Player detail full-page game log (ESPN, Recharts)
+- ✅ Pre-Game Intelligence panel (scheduled games)
+- ✅ Game-log sessionStorage cache (45-min TTL)
+- ✅ Back-to-back detection
+- ✅ Blowout risk heuristic
+- ✅ Skeleton loading states (play-by-play, player-detail, pregame panel)
 
-### Task 2: NBA and WNBA reliability and polish — [17f42e1]
-- [x] Off-season banner for leagues with `active: false`
-- [x] Live auto-refresh every 30s while games are in progress
-- [x] "Next game: [date]" subtitle when next game is > 7 days away
-- [x] Accurate "next 6 months" message (was "45 days")
-- [x] Auto-refresh timestamp shown when live
+---
 
-### Task 3: Other Basketball (NBL/NZ NBL/FIBA) polish — [67a6aa4]
-- [x] NZ NBL box score: provider-specific no-data message
-- [x] FIBA league page: tournament-window empty state with schedule context
-- [x] thesportsdb.js: AET/AP/PSO/Abandoned status handling
-- [x] thesportsdb.js: Postponed/Cancelled events stay "scheduled"
-- [x] thesportsdb.js: `makeAbbreviation()` extracted as named helper
+## Near-Term
 
-## 📋 Future / Nice-to-Have
-- [ ] EuroLeague / EuroCup (blocked: no public API)
-- [ ] Push notifications for live game start
-- [ ] Multi-game lineup optimizer (DFS-style)
-- [ ] Lineup sharing (URL-based)
-- [ ] Dark/light theme toggle
-- [ ] Player headshots (ESPN CDN when available)
+### Intelligence
+- 📋 **Home/away split indicators** on player rows in the pre-game panel — players often perform differently at home vs. away; show a trend or badge if the split is significant
+- 📋 **Opponent defensive rating context** in pre-game intel — DraftKings-style matchup rating (requires a heuristic since no paid source is used)
+- 📋 **Injury report timestamp** — show when ESPN last updated the injury report, not just when the app refreshed
+
+### UX
+- 📋 **Player compare sheet** — tap "Compare" to get a side-by-side stats card without navigating away
+- 📋 **Haptic feedback** on player add/remove (mobile devices that support it)
+- 📋 **Export lineup to clipboard** — copy in DraftKings CSV format for easy pasting
+
+### Performance
+- 📋 **Background refresh** — stale-while-revalidate pattern for the league overview so the page loads instantly from cache then updates silently
+
+---
+
+## Medium-Term Ideas
+
+- 💡 **Roster differentiation score** — given N saved lineups, suggest lightly-owned players to maximize lineup diversity
+- 💡 **DFS contest type presets** — one-and-done showdown vs. GPP vs. cash game changes the right credit allocation strategy
+- 💡 **Notification for confirmed starters** — push/badge when a previously Questionable player is confirmed ~1hr before tip-off
+- 💡 **Multi-game slate support** — optimizer currently locks to one game; slate view (multiple games) for DraftKings-style contests
+
+---
+
+## Won't Do (for now)
+- Live odds integration (requires a paid data source)
+- Season-long fantasy (this tool is DFS / showdown focused)
+- Social / sharing features
+- New leagues beyond current six (NBL, NZ NBL, FIBA, NBA, WNBA, NBA Summer)
