@@ -4,12 +4,15 @@
 // each league. UI components only ever import from this file — never from a
 // provider module directly.
 //
-// Adding a new league:
+// Adding a new basketball league:
 //   1. Create src/providers/<league>.js implementing the provider contract.
 //   2. Add an entry to PROVIDERS below.
 //   3. Add an entry to LEAGUE_CONFIGS below.
 //   4. Add the key to ALL_LEAGUES.
 //   5. Add the key to LeagueKey in src/lib/types.ts.
+//
+// Cricket uses a separate auto-discovery architecture — see providers/cricket.js.
+// No code changes needed to add new cricket competitions.
 
 import * as nbaProvider from "./providers/nba";
 import * as wnbaProvider from "./providers/wnba";
@@ -17,6 +20,17 @@ import * as nblProvider from "./providers/nbl";
 import * as nznblProvider from "./providers/nznbl";
 import * as fibaProvider from "./providers/fiba";
 import * as nbaSummerProvider from "./providers/nba-summer";
+import * as cricketProvider from "./providers/cricket";
+
+// ─── Cricket provider adapter ──────────────────────────────────────────────
+// Wraps the cricket provider so it satisfies the same interface as basketball
+// providers (getLeagueOverview, getGame, getPlayerGameLog, getTeamSchedule).
+const cricketAdapter = {
+  getLeagueOverview: () => cricketProvider.getLeagueOverview(),
+  getGame: (gameId) => cricketProvider.fetchGameById(gameId),
+  getPlayerGameLog: () => Promise.resolve([]),
+  getTeamSchedule: () => Promise.resolve([]),
+};
 
 const PROVIDERS = {
   nba: nbaProvider,
@@ -25,6 +39,7 @@ const PROVIDERS = {
   nznbl: nznblProvider,
   fiba: fibaProvider,
   "nba-summer": nbaSummerProvider,
+  cricket: cricketAdapter,
 };
 
 function getProvider(league) {
@@ -63,7 +78,7 @@ export const LEAGUE_CONFIGS = {
     accent: "text-sky-400",
     accentHover: "group-hover:text-sky-300",
     textLight: "text-sky-200",
-    active: true, // Runs July in Las Vegas
+    active: true,
   },
   nba: {
     name: "NBA",
@@ -74,7 +89,7 @@ export const LEAGUE_CONFIGS = {
     accent: "text-blue-400",
     accentHover: "group-hover:text-blue-300",
     textLight: "text-blue-200",
-    active: false, // Regular season returns ~October
+    active: false,
   },
   nbl: {
     name: "NBL",
@@ -85,7 +100,7 @@ export const LEAGUE_CONFIGS = {
     accent: "text-emerald-400",
     accentHover: "group-hover:text-emerald-300",
     textLight: "text-emerald-200",
-    active: false, // Season starts October 2026
+    active: false,
   },
   nznbl: {
     name: "NZ NBL",
@@ -96,7 +111,7 @@ export const LEAGUE_CONFIGS = {
     accent: "text-teal-400",
     accentHover: "group-hover:text-teal-300",
     textLight: "text-teal-200",
-    active: true, // Season runs May–August; games confirmed July 2026
+    active: true,
   },
   fiba: {
     name: "FIBA",
@@ -109,29 +124,29 @@ export const LEAGUE_CONFIGS = {
     textLight: "text-violet-200",
     active: true,
   },
+  cricket: {
+    name: "Cricket",
+    fullName: "Cricket — All Competitions",
+    description: "T20, ODI, Test & more",
+    color: "green",
+    gradient: "from-green-900 to-slate-900",
+    accent: "text-green-400",
+    accentHover: "group-hover:text-green-300",
+    textLight: "text-green-200",
+    active: true,
+  },
 };
-
-/**
- * Ordered list of leagues shown on the home page.
- * Data source status (July 2026):
- *   nba        → ESPN (off-season, next game Oct 2026)
- *   wnba       → ESPN (live ✅)
- *   nba-summer → ESPN NBA type-3 filter + NBA CDN fallback (active ✅)
- *   nbl        → ESPN (off-season, next game Oct 2026)
- *   nznbl      → TheSportsDB ID 5066 (in-season ✅)
- *   fiba       → ESPN (varies by tournament)
- */
 
 /** NBA and WNBA — rendered as full-width premium cards on the home page. */
 export const PRIMARY_LEAGUES = ["nba", "wnba"];
 
 /**
- * Secondary leagues — grouped under "Other Basketball" on the home page.
- * Summer League is rendered conditionally (only when it has live/upcoming games).
+ * Secondary basketball leagues — grouped under "Other Basketball".
+ * Summer League is shown only when it has active games.
  */
 export const SECONDARY_LEAGUES = ["nbl", "nznbl", "fiba", "nba-summer"];
 
-/** Full ordered list — used internally (data fetching, routing). */
+/** All basketball leagues used internally. Cricket is handled separately. */
 export const ALL_LEAGUES = [
   ...PRIMARY_LEAGUES,
   ...SECONDARY_LEAGUES,
@@ -155,18 +170,6 @@ async function safeCall(fn, fallback, label) {
 }
 
 // ── League overview cache ─────────────────────────────────────────────────────
-//
-// fetchLeagueOverview with scan:true can hit dozens of ESPN endpoints. Cache the
-// result per (league × scan flag) for 2 minutes so navigating back and forth
-// between the home page and league page doesn't retrigger the full scan.
-//
-// Two layers:
-//   1. In-memory Map<key, {data, fetchedAt}> — fastest, cleared on page reload.
-//   2. sessionStorage JSON — survives component unmount/remount within the session.
-//
-// If two calls arrive simultaneously with the same key the in-flight Map coalesces
-// them into a single network request so only one fetch happens regardless of how
-// many components mount at the same time.
 
 const OVERVIEW_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
 const OVERVIEW_MEM_CACHE = new Map(); // key → { data, fetchedAt }
@@ -202,18 +205,10 @@ function setOverviewCache(key, data) {
   } catch {}
 }
 
-/**
- * Today's games for a league.
- * @param {string} league
- */
-export async function fetchGamesByLeague(league) {
-  return safeCall(() => getProvider(league).getTodayGames(), [], `fetchGamesByLeague(${league})`);
-}
+// ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
  * Games for a specific YYYYMMDD date.
- * @param {string} league
- * @param {string} dateStr
  */
 export async function fetchGamesByLeagueAndDate(league, dateStr) {
   const provider = getProvider(league);
@@ -223,26 +218,15 @@ export async function fetchGamesByLeagueAndDate(league, dateStr) {
 
 /**
  * Timezone-safe league overview: { live, upcoming, lastPlayed }.
- *
- * Uses the provider's own status field — never local calendar dates — so a
- * currently-live game always appears as live regardless of viewer timezone.
- *
- * scan: true (default) — searches forward/backward to find upcoming/last
- * game even during off-season gaps. Use scan: false on the home page for a
- * fast first paint.
- *
- * @param {string} league
- * @param {{ scan?: boolean }} [options]
+ * For "cricket" — delegates to the cricket provider's auto-discovery.
  */
 export async function fetchLeagueOverview(league, options) {
   const scan = options?.scan ?? false;
   const key = overviewCacheKey(league, scan);
 
-  // Return cached data when fresh.
   const cached = getOverviewFromCache(key);
   if (cached) return cached;
 
-  // Coalesce concurrent requests — only one network call per key at a time.
   if (OVERVIEW_IN_FLIGHT.has(key)) return OVERVIEW_IN_FLIGHT.get(key);
 
   const promise = safeCall(
@@ -262,20 +246,52 @@ export async function fetchLeagueOverview(league, options) {
   return promise;
 }
 
-// ── Game detail cache ─────────────────────────────────────────────────────────
+// ─── Cricket-specific exports ──────────────────────────────────────────────
 //
-// fetchGameById is called on every component mount (box score, optimizer,
-// pregame panel) AND on every poll tick for live games. The cache prevents
-// redundant fetches on remount; the poll loop bypasses it via { noCache: true }
-// so live state is never stale.
-//
-// TTLs by game status:
-//   in_progress → 30 s   (changes fast; remounts should feel fresh)
-//   final       → 5 min  (score is fixed; back-navigation is instant)
-//   scheduled   → 2 min  (lineups/injuries change infrequently pre-game)
-//
-// Cache is memory-only (no sessionStorage) — game payloads can be large and
-// the primary win is within a single navigation session.
+// The cricket provider returns CricketGame objects (not basketball Game),
+// so these functions are exported separately for cricket-aware UI components.
+
+/**
+ * Returns the merged cricket overview across all competitions.
+ * Caches for 2 minutes. Live games refresh on demand via fetchCricketGame.
+ */
+export async function fetchCricketOverview() {
+  const key = "cricket:overview";
+  const cached = getOverviewFromCache(key);
+  if (cached) return cached;
+
+  if (OVERVIEW_IN_FLIGHT.has(key)) return OVERVIEW_IN_FLIGHT.get(key);
+
+  const promise = cricketProvider.getLeagueOverview().then((result) => {
+    OVERVIEW_IN_FLIGHT.delete(key);
+    if (result) setOverviewCache(key, result);
+    return result;
+  }).catch((err) => {
+    OVERVIEW_IN_FLIGHT.delete(key);
+    console.error("[api] fetchCricketOverview failed:", err?.message ?? err);
+    return { live: [], upcoming: [], lastPlayed: null, activeCompetitions: [] };
+  });
+
+  OVERVIEW_IN_FLIGHT.set(key, promise);
+  return promise;
+}
+
+/**
+ * Full cricket game detail (batting/bowling scorecard).
+ * gameId format: "{competitionSlug}:{espnEventId}"
+ */
+export async function fetchCricketGame(gameId, { noCache = false } = {}) {
+  return cricketProvider.fetchGameById(gameId, { noCache });
+}
+
+/**
+ * Player roster + stats for a cricket match (used by cricket optimizer).
+ */
+export async function fetchCricketRoster(gameId) {
+  return cricketProvider.fetchGameRoster(gameId);
+}
+
+// ── Game detail cache (basketball) ────────────────────────────────────────────
 
 const GAME_TTL_MS = {
   in_progress: 30_000,
@@ -284,8 +300,8 @@ const GAME_TTL_MS = {
 };
 const GAME_DEFAULT_TTL_MS = 30_000;
 
-const GAME_MEM_CACHE = new Map(); // `${gameId}:${league}` → { data, fetchedAt }
-const GAME_IN_FLIGHT = new Map(); // same key → Promise
+const GAME_MEM_CACHE = new Map();
+const GAME_IN_FLIGHT = new Map();
 
 function getGameFromCache(key) {
   const entry = GAME_MEM_CACHE.get(key);
@@ -300,13 +316,7 @@ function setGameCache(key, data) {
 
 /**
  * Full game detail (box score) by game ID.
- *
- * @param {string} gameId
- * @param {string} league
- * @param {{ noCache?: boolean }} [options]
- *   noCache – pass true in poll loops so live state is always fetched fresh.
- *   The result is still written to the cache regardless, so a remount right
- *   after a poll will hit a warm cache entry.
+ * For cricket games, use fetchCricketGame() instead.
  */
 export async function fetchGameById(gameId, league, { noCache = false } = {}) {
   const key = `${gameId}:${league}`;
@@ -323,7 +333,6 @@ export async function fetchGameById(gameId, league, { noCache = false } = {}) {
     `fetchGameById(${gameId}, ${league})`
   ).then((result) => {
     GAME_IN_FLIGHT.delete(key);
-    // Always populate cache (even for noCache calls) so remounts see fresh data.
     if (result !== undefined) setGameCache(key, result);
     return result;
   }).catch((err) => {
@@ -337,8 +346,6 @@ export async function fetchGameById(gameId, league, { noCache = false } = {}) {
 
 /**
  * Player historical game log (most recent first).
- * @param {string} playerId
- * @param {string} league
  */
 export async function fetchPlayerGameLog(playerId, league) {
   return safeCall(
@@ -350,8 +357,6 @@ export async function fetchPlayerGameLog(playerId, league) {
 
 /**
  * Team season schedule — used for back-to-back detection.
- * @param {string} teamId
- * @param {string} league
  */
 export async function fetchTeamSchedule(teamId, league) {
   return safeCall(

@@ -4,108 +4,99 @@ All notable changes to HoopIQ are documented here in reverse-chronological order
 
 ---
 
+## [Unreleased] — Multi-Sport Platform + Cricket Architecture (July 24, 2026)
+
+### Feat — Cricket auto-discovery provider (`src/providers/cricket.js`)
+- `COMPETITION_REGISTRY` contains 30+ ESPN cricket competition slugs spanning T20, ODI, Test, and The Hundred.
+- `getLeagueOverview()` queries ALL slugs in parallel, merges results, deduplicates by game ID.
+- Graceful: each slug failure is swallowed independently so one 404 never breaks the home page.
+- `fetchGameById(gameId)` fetches detailed batting/bowling scorecard for any match.
+- `fetchGameRoster(gameId)` returns the playing XI for the optimizer.
+- Cache: 2-min scoreboard TTL; 30s/2min/5min summary TTL by match status.
+- **Adding a new T20 league = one line in `COMPETITION_REGISTRY`. No other changes needed.**
+
+### Feat — Cricket fantasy scoring rule engine (`src/lib/cricket-scoring.ts`)
+- `ScoringProfile` type encodes all rules as data, not code.
+- Five built-in profiles: **T20**, **ODI**, **Test**, **The Hundred**, **T10**.
+- T20 defaults per spec: run +1, four +4, six +6, 25/50/75/100 milestones, duck −2, wicket +30, LBW/Bowled +8, 3/4/5 wicket hauls, catch +8, 3-catch bonus +4, stumping +12, run-out direct +12, indirect +6.
+- Strike Rate tiers (min 10 balls): >170 → +6, 150.01–170 → +4, 130–150 → +2, 70.01–129.99 → 0, 60–70 → −2, 50–59.99 → −4, <50 → −6.
+- Economy tiers (min 2 overs): <5 → +6, 5–5.99 → +4, 6–7 → +2, 7.01–9.99 → 0, 10–11 → −2, 11.01–12 → −4, >12 → −6.
+- **The Hundred**: SR and Economy bonuses disabled (per format rules).
+- **Test**: no SR/Economy; lower wicket value (16pts); higher duck penalty (−4).
+- `getScoringProfile(format, competitionName)` auto-detects profile from match format string or competition name (e.g., "hundred" in name → The Hundred profile).
+- `calculateCricketFantasyPoints(stats, profile)` returns full breakdown (batting, bowling, fielding, SR bonus, economy bonus, total).
+- Captain (×2.0) / Vice Captain (×1.5) handled by `calculateLineupPoints`.
+
+### Feat — Multi-provider fantasy metadata (`src/lib/fantasy-providers.ts`)
+- Attempts to fetch player credits/roles from **FantasyWala**, **Calc11**, **DafaFantasy** in parallel.
+- Each provider failure is silently swallowed; optimizer works normally without any provider data.
+- `fetchFantasyMetadata(team1, team2)` returns merged `MergedFantasyMeta` with priority order: FantasyWala → Calc11 → DafaFantasy.
+- `lookupPlayerMeta(name, meta)` fuzzy-matches player names to handle minor spelling differences.
+
+### Feat — Cricket box score page (`src/pages/cricket-box-score.tsx`)
+- Route: `/cricket/:competition/game/:id`
+- Renders match header with teams, scores, overs, competition, format.
+- Batting scorecard: runs, balls, 4s, 6s, dismissal, live FPTS per batter.
+- Bowling scorecard: overs, maidens, runs conceded, wickets, live FPTS per bowler.
+- Live polling every 30s for in-progress matches.
+- "Fantasy Optimizer →" CTA in match header.
+- Graceful "No scorecard available" state for pre-game or data-unavailable matches.
+
+### Feat — Cricket fantasy optimizer (`src/pages/cricket-optimizer.tsx`)
+- Route: `/cricket/:competition/game/:id/optimizer`
+- 11-player lineup: Captain (×2.0), Vice Captain (×1.5), 9 players.
+- 100-credit budget with live credit bar (amber >90%, red over budget).
+- Auto-picks profile from match format on load (T20 → T20 profile, etc.).
+- Profile switcher: T20 / ODI / Test / The Hundred / T10 — with inline rules summary.
+- Auto-Pick: greedy algorithm by FPTS (or credits as proxy pre-match).
+- Clear button, per-player +/− toggle, C/VC assignment buttons.
+- Fantasy provider enrichment: credits fetched from FantasyWala/Calc11/DafaFantasy and merged in.
+- Player pool with name search and role filter (BAT/BOWL/ALL/WK).
+- Status chips: players selected, captain set, VC set, within budget.
+
+### Feat — Cricket section on home page (`src/pages/home.tsx`)
+- New `CricketSection` card between WNBA and Other Basketball.
+- Shows live count, active competitions count, summary text while loading.
+- Renders `CricketGameCard` for each active/live/upcoming match.
+- "No active competitions" state with helpful message when nothing is discovered.
+- Collapsible (default expanded).
+
+### Feat — Updated routing (`src/App.tsx`)
+- Added cricket routes BEFORE generic `/:league` routes to prevent mis-matching:
+  - `/cricket/:competition/game/:id/optimizer` → `CricketOptimizer`
+  - `/cricket/:competition/game/:id` → `CricketBoxScore`
+  - `/cricket/:competition` → `LeagueGames` (existing, now handles cricket slugs)
+
+### Feat — API layer updates (`src/api.js`)
+- Cricket adapter: wraps cricket provider in standard `{getLeagueOverview, getGame, getPlayerGameLog, getTeamSchedule}` interface.
+- `fetchCricketOverview()` — cached cricket overview (2-min TTL).
+- `fetchCricketGame(gameId, options)` — cricket match detail.
+- `fetchCricketRoster(gameId)` — playing XI for optimizer.
+- `LEAGUE_CONFIGS.cricket` added (green theme, "T20, ODI, Test & more" description).
+
+### Types
+- `"cricket"` added to `LeagueKey` union in `src/lib/types.ts`.
+- New `src/lib/cricket-types.ts` with `CricketGame`, `CricketPlayer`, `CricketInnings`, `CricketPlayerStats`, `CricketLeagueOverview`, `PlayerFantasyMeta`, etc.
+
+---
+
 ## [Unreleased] — UI & Intelligence Polish (July 20, 2026)
 
 ### Task 1 — Box Score Polish
-- Removed ★ Favorite Star column from box-score table (import, `<th>`, `<td>`, `isFavorite` variable). Saved ~40 px of horizontal space; horizontal scroll is now clean.
-- Sticky player-name column repositioned to `left-0` (was `left-10`, which assumed the now-removed star column).
-- `colSpan` on the empty-state row corrected from 12 → 11.
-- "Favorites only" toggle label gains a subtitle: "Tap a player name to favorite them" — replaces the removed star as the discoverability hint.
-- When `favoritesOnly` is active but no players match, dedicated empty state: "No favorited players in this view. Tap any player's name to open their profile and add them to favorites."
+- Removed ★ Favorite Star column from box-score table. Sticky player col at `left-0`.
+- "Favorites only" toggle improved label + empty state hint.
 
 ### Task 2 — UI Polish (Fantasy Optimizer)
-- Re-injected `AiFantasyCoach` above the budget section in `fantasy-optimizer.tsx` (had been dropped during merge resolution).
-- Live indicator in optimizer header changed from `text-red-400 bg-red-400` to basketball orange (`text-primary bg-primary`) with double-ring ping animation, consistent with all other live indicators in the app.
+- Re-injected `AiFantasyCoach` above budget section.
+- Live indicator unified to primary orange.
 
 ### Task 4 — Fantasy Intelligence Polish
-- **AI Coach explanations** — all 12 picks now carry precise, data-grounded text:
-  - *Best Value*: shows `{credits} cr → {FPTS} avg ({data source}) = {ratio} pts/cr`.
-  - *Sleeper*: shows FPTS avg + credit cost + how far below pool median + triggering signal.
-  - *Trending Down*: shows actual FPTS avg before the warning, not just generic text.
-  - *Safest*: includes starter-status wording ("confirmed starter" vs "expected starter") and explicit B2B-clear note.
-- **PickCard redesign**: cards widened to `w-52 sm:w-56`; label color now matches the left-border accent per pick kind (orange for Captain, amber for VC, emerald for Value, etc.); explanation text upgraded to `text-[11.5px]` with `line-clamp-4`; team abbreviation rendered in small-caps for scannability.
+- AI Coach explanations: all 12 picks carry specific numbers + data source.
+- PickCard: wider cards, accent-matched label colours, `line-clamp-4` explanation.
 
 ### Merge resolution
-- Resolved 20 add/add conflicts from diverged local (`feat/AI-fantasy-coach`) and remote (`origin/main`).
-- Remote providers, tsconfig, and docs merged in as canonical; local UI pages (box-score, home, layout, game-card, index.css) retained for premium dark-theme redesign.
+- Resolved 20 add/add conflicts from diverged local and remote branches.
 
 ---
 
-## [Unreleased] — Reliability & Intelligence Pass (July 2026)
-
-### Fix — broken imports
-- Restored `Link` (wouter) import in `box-score.tsx` and `useRef` import in `fantasy-optimizer.tsx` — both had been removed incorrectly by a prior automated pass, causing a runtime crash on the box score page.
-
-### Feat — game detail cache (`api.js`)
-- `fetchGameById` now caches results in-memory with status-aware TTLs: 30 s for `in_progress` games, 2 min for `scheduled`, 5 min for `final`.
-- Poll loops in `use-live-game.ts` pass `{ noCache: true }` so live/pregame updates always hit the network; the result is still written to cache so remounts after a poll see fresh data instead of refetching.
-- Concurrent initial mounts share a single in-flight Promise via an in-flight Map (same dedup pattern as the overview cache).
-
-### Feat — opponent matchup context in Pre-Game Intel panel
-- Each player row in `pregame-intel-panel.tsx` now shows a subtle `vs <ABBR>` or `@ <ABBR>` tag after the position label so fantasy users can see the matchup without scrolling to the team header.
-
-### Feat — collapsible filter panel in Fantasy Optimizer
-- Sort row (always visible) gains a **Filters** toggle button. Team filter, position filter, Favorites Only, and Avoid Used toggles collapse behind it.
-- A badge on the Filters button shows the count of active non-default filters so the list never looks silently filtered.
-- Filter panel auto-opens on load when saved preferences contain non-default values.
-- `aria-expanded` and `aria-label` set on the toggle for keyboard/screen-reader users.
-
-### Feat — lineup slot visualization in Fantasy Optimizer
-- A new **Roster Slots** card appears below the requirements checklist whenever any player is selected. Shows all 8 slots in order: Captain (C ×2.0), Vice Captain (VC ×1.5), then up to 6 FLEX rows.
-- Empty C/VC slots show an inline hint ("Set Captain — tap C on a player") and a Required badge.
-- Improves C/VC assignment discoverability on first use.
-
-### Feat — live update error handling (`use-live-game.ts`, `box-score.tsx`)
-- `useLiveGame` now tracks consecutive empty/undefined poll responses via a `stallCount` ref. After 2 consecutive misses the hook sets `isStale: true`.
-- `box-score.tsx` surfaces this as an amber **Reconnecting…** pulse indicator, replacing the "Auto-updating" text. Resets automatically when the next poll succeeds.
-
-### Feat — pregame panel skeleton loading state
-- The "Loading lineups & injury reports…" plain-text loading message replaced with animated skeleton bars for the team availability cards and player rows, consistent with the box score and player detail skeletons.
-
-### Docs
-- Created `docs/PROJECT_CONTEXT.md` — single-page project orientation for any new agent.
-- Created `docs/KNOWN_ISSUES.md` — tracked limitations, design decisions, and resolved bugs.
-
----
-
-## [Phase 2 Polish] — July 2026 (committed earlier)
-
-### Skeleton loading states
-- `play-by-play.tsx`: "Loading game…" replaced with 4 animated skeleton bars.
-- `player-detail.tsx`: "Loading game log from ESPN…" replaced with 3 skeleton bars + subtle label.
-- `home.tsx`: "No data" chip text improved to "Unavailable".
-
----
-
-## [Phase 1 Polish] — Tasks 1–5, July 2026 (commit 33140a3)
-
-### Task 1 — Fantasy Intelligence panel (`pregame-intel-panel.tsx`)
-- Redesigned `PlayerIntelRow`: two-section design — name/badges row + metrics row (Proj Min · FPTS L5 with 🔥/❄️ · Min Trend only when non-flat · Confidence).
-- Confidence indicator: "High / Moderate / Low" derived from consistency, starter status, B2B, injury. Color-coded green / amber / rose.
-- Blowout risk simplified to one-liner (only Medium/High shown).
-- OUT players dimmed, no projections shown.
-- B2B pill on team availability cards.
-- Header simplified; methodology footnote moved to bottom.
-
-### Task 2 — Player detail sheet (`player-detail-sheet.tsx`)
-- Color-coded bar chart (green ≥ 110%, red ≤ 90%, purple within ±10%).
-- Average reference line on bar chart.
-- FPTS value labels on bars.
-- "View Full Game Log" button moved to top.
-- Scheduled game stats hidden.
-- "App Avg" label (was "Season Avg*").
-- Better empty form state.
-
-### Task 3 — Optimizer polish (`fantasy-optimizer.tsx`)
-- Credit usage visualization bar (amber >85%, red over budget).
-- Unified requirements checklist (replaces separate error + valid banners).
-- Larger C/VC role buttons (28px → 32px).
-
-### Task 4 — Performance (`api.js`)
-- League overview cache: 2-min TTL + in-memory + sessionStorage dual-layer.
-- In-flight deduplication for `fetchLeagueOverview`.
-
-### Task 5 — Bug fixes
-- Scheduled game stats no longer show misleading zeros.
-- OUT player projections suppressed.
-- Form heading shows real game count.
+## Earlier sessions — see git log for full history

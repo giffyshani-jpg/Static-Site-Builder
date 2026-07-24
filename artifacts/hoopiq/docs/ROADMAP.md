@@ -14,75 +14,79 @@ Tracks planned improvements, in-progress work, and longer-horizon ideas.
 
 ## Completed
 
+### Multi-Sport Cricket Platform — July 24, 2026
+- ✅ Cricket auto-discovery provider — queries 30+ ESPN slugs in parallel (IPL, BBL, CPL, PSL, SA20, ILT20, The Hundred, MLC, LPL, Vitality Blast, TNPL, and more)
+- ✅ `COMPETITION_REGISTRY` is the single place to add new leagues — zero other code changes
+- ✅ Fantasy scoring rule engine — `ScoringProfile` type with T20, ODI, Test, The Hundred, T10 profiles
+- ✅ T20 scoring: run +1, four +4, six +6, milestones (25/50/75/100), duck −2, wicket +30, LBW/Bowled +8, 3/4/5 haul bonuses, catch +8, 3-catch bonus, stumping +12, run-out direct +12, indirect +6
+- ✅ Strike Rate tiers (min 10 balls) — T20 and T10 only
+- ✅ Economy tiers (min 2 overs) — T20 and T10 only
+- ✅ The Hundred: SR and Economy disabled (per format rules)
+- ✅ Test cricket: lower wicket value (16pts), no SR/Economy, higher duck penalty (−4)
+- ✅ `getScoringProfile(format, name)` auto-detects correct profile
+- ✅ Multi-provider fantasy metadata — FantasyWala, Calc11, DafaFantasy tried in parallel with graceful fallback
+- ✅ Cricket box score page — batting + bowling scorecards, live FPTS per player
+- ✅ Cricket fantasy optimizer — 11-player, C×2/VC×1.5, 100-credit budget, auto-pick, profile switcher
+- ✅ Cricket section on home page — auto-shows active competitions, collapses gracefully when none active
+- ✅ Cricket routing — `/cricket/:competition/game/:id` and `/optimizer` routes
+- ✅ `"cricket"` added to `LeagueKey` type
+
 ### UI & Intelligence Polish — July 20, 2026
-- ✅ Box score: removed ★ favorite star column (saves horizontal space, scroll is clean); sticky player col at `left-0`
-- ✅ Fantasy Optimizer: re-injected AI Fantasy Coach above budget section; live indicator unified to primary orange
-- ✅ AI Coach explanations: all 12 picks now carry specific numbers, data source, and actionable framing
-- ✅ PickCard: wider cards (w-52/w-56), accent-matched label colours per pick kind, `line-clamp-4` explanation
-- ✅ Box score "Favorites only" toggle: improved label + hints for empty state
-- ✅ Merge resolution: brought remote (reliability+features) and local (AI coach+premium UI) back into sync
+- ✅ Box score: removed ★ star column; sticky player col at `left-0`
+- ✅ Fantasy Optimizer: re-injected AI Fantasy Coach above budget section
+- ✅ Live indicator unified to primary orange
+- ✅ AI Coach explanations: all 12 picks carry specific numbers + data source
+- ✅ PickCard: wider, accent-matched label colours, `line-clamp-4` explanation
+- ✅ Merge resolution: 20 add/add conflicts resolved
 
 ### Reliability & Intelligence Pass — July 2026
-- ✅ Game detail cache (30s live · 2min scheduled · 5min final TTL) — eliminates remount refetches
-- ✅ Poll-loop noCache opt-out — live/pregame polls always hit network; cache stays warm for remounts
-- ✅ Opponent matchup context in pre-game panel (vs / @ abbreviation on each player row)
-- ✅ Collapsible filter panel in Optimizer — sort always visible, secondary filters behind Filters toggle with active-count badge
-- ✅ Lineup slot visualization — 8 named roster rows (C → VC → FLEX → empty) with role hints
-- ✅ Live update error handling — `isStale` / Reconnecting… amber indicator after 2 consecutive poll misses
+- ✅ Game detail cache (30s/2min/5min TTL by status)
+- ✅ Poll-loop noCache opt-out
+- ✅ Opponent matchup context in pre-game panel
+- ✅ Collapsible filter panel in Optimizer
+- ✅ Lineup slot visualization
+- ✅ Live update error handling (`isStale` / Reconnecting… indicator)
 - ✅ Pregame panel skeleton loading state
-- ✅ Broken import fixes (Link in box-score, useRef in optimizer)
 
-### Polish Pass (Tasks 1–5) — July 2026
-- ✅ Task 1: Fantasy Intelligence panel redesign (readability, confidence indicator, blowout risk)
-- ✅ Task 2: Player detail sheet (color-coded bars, average line, better labels, game-log link placement)
-- ✅ Task 3: Optimizer polish (credit bar, unified checklist, larger C/VC buttons)
-- ✅ Task 4: League overview cache (2-min TTL + in-flight deduplication)
-- ✅ Task 5: Bug fixes (scheduled game zeros, OUT player projections, form heading)
-
-### Earlier (pre-polish)
-- ✅ Auto-Pick Best greedy algorithm
-- ✅ Suggest Credits proportional allocation
-- ✅ Progress bar on lineup fill
-- ✅ Saved lineups with live stats
-- ✅ OCR lineup import from screenshots
-- ✅ Compare bar for side-by-side player comparison
-- ✅ Player detail full-page game log (ESPN, Recharts)
-- ✅ Pre-Game Intelligence panel (scheduled games)
+### Earlier (pre-reliability pass) — July 2026
+- ✅ AI Fantasy Coach (12 picks from real data)
+- ✅ Auto-Pick Best, Suggest Credits, lineup progress bar
+- ✅ Saved lineups with live stats, OCR import
+- ✅ Compare bar, player detail game log
+- ✅ Pre-Game Intel panel
 - ✅ Game-log sessionStorage cache (45-min TTL)
-- ✅ Back-to-back detection
-- ✅ Blowout risk heuristic
-- ✅ Skeleton loading states (play-by-play, player-detail, pregame panel)
+- ✅ Back-to-back detection, blowout risk, skeleton loading states
 
 ---
 
-## Near-Term
+## Near-Term Cricket
 
-### Intelligence
-- 📋 **Home/away split indicators** on player rows in the pre-game panel — players often perform differently at home vs. away; show a trend or badge if the split is significant
-- 📋 **Opponent defensive rating context** in pre-game intel — DraftKings-style matchup rating (requires a heuristic since no paid source is used)
-- 📋 **Injury report timestamp** — show when ESPN last updated the injury report, not just when the app refreshed
+- 📋 **ESPN slug validation** — pre-validate which slugs are active; avoid wasted requests on every home load
+- 📋 **Cricket player game log** — ESPN cricket gamelog endpoint for individual history
+- 📋 **Pre-game intel for cricket** — batting/bowling form, pitch conditions, head-to-head stats
+- 📋 **CricketGameCard in LeagueGames** — cricket-specific card for `/cricket/:competition` page
+- 📋 **Cricket live banner** — show live cricket games in the LIVE NOW banner alongside basketball
+- 📋 **Scorecard polish** — fall of wickets, partnership data, extras
 
-### UX
-- 📋 **Player compare sheet** — tap "Compare" to get a side-by-side stats card without navigating away
-- 📋 **Haptic feedback** on player add/remove (mobile devices that support it)
-- 📋 **Export lineup to clipboard** — copy in DraftKings CSV format for easy pasting
+## Near-Term Basketball
 
-### Performance
-- 📋 **Background refresh** — stale-while-revalidate pattern for the league overview so the page loads instantly from cache then updates silently
+- 📋 **Home/away split indicators** — player rows in pre-game panel
+- 📋 **Opponent defensive rating** — heuristic matchup rating without paid source
+- 📋 **Export lineup to clipboard** — copy DraftKings CSV format
+- 📋 **Injury report timestamp** — show when ESPN last updated injury report
 
----
+## Platform
 
-## Medium-Term Ideas
+- 📋 **Retire old basketball leagues** — NBL, NZ NBL, FIBA, Summer League are mostly off-season; hide behind toggle or only show when active
+- 📋 **Background refresh** — stale-while-revalidate for league overviews
+- 📋 **Mobile animations** — micro-interactions, screen transitions
+- 📋 **Dark theme polish** — card depth, color hierarchy improvements
 
-- 💡 **Roster differentiation score** — given N saved lineups, suggest lightly-owned players to maximize lineup diversity
-- 💡 **DFS contest type presets** — one-and-done showdown vs. GPP vs. cash game changes the right credit allocation strategy
-- 💡 **Notification for confirmed starters** — push/badge when a previously Questionable player is confirmed ~1hr before tip-off
-- 💡 **Multi-game slate support** — optimizer currently locks to one game; slate view (multiple games) for DraftKings-style contests
+## Medium-Term
 
----
-
-## Won't Do (for now)
-- Live odds integration (requires a paid data source)
-- Season-long fantasy (this tool is DFS / showdown focused)
-- Social / sharing features
-- New leagues beyond current six (NBL, NZ NBL, FIBA, NBA, WNBA, NBA Summer)
+- 💡 **Roster differentiation score** — suggest lightly-owned players for lineup diversity
+- 💡 **Cricket captain picks** — data-driven C/VC recommendations based on form + matchup
+- 💡 **DFS contest presets** — GPP vs. cash game credit allocation strategy
+- 💡 **Notification for confirmed starters** — push when Questionable player is confirmed
+- 💡 **Multi-game slate** — optimizer currently one-game; slate view for multi-match contests
+- 💡 **Women's cricket** — WBBL, Women's T20 World Cup, Women's IPL via ESPN

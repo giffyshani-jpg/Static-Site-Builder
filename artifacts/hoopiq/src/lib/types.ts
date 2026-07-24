@@ -121,14 +121,18 @@ export type PlayerGameLogEntry = {
   plusMinus: null;
 };
 
-/** All leagues supported by the app's provider registry. */
+/**
+ * All leagues supported by the app's provider registry.
+ * "cricket" is the meta-league key for all cricket competitions combined.
+ */
 export type LeagueKey =
   | "nba"
   | "nba-summer"
   | "wnba"
   | "nbl"
   | "nznbl"
-  | "fiba";
+  | "fiba"
+  | "cricket";
 
 export type Game = {
   id: string;
